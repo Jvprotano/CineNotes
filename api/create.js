@@ -40,6 +40,7 @@ module.exports = async (req, res) => {
     };
 
     await put(path, JSON.stringify(data), {
+      access: 'public',
       addRandomSuffix: false,
       contentType: 'application/json',
     });
