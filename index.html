@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineNotes - Nossos Filmes</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Login Screen -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">🎬</div>
+      <h1>CineNotes</h1>
+      <p class="login-subtitle">Avaliem filmes juntos</p>
+
+      <div class="login-tabs">
+        <button class="login-tab active" data-ltab="enter">Entrar</button>
+        <button class="login-tab" data-ltab="create">Criar Sala</button>
+      </div>
+
+      <form id="form-enter" class="login-form">
+        <div class="form-group">
+          <label for="enter-code">Código da Sala</label>
+          <input type="text" id="enter-code" placeholder="ex: joao-maria" required>
+        </div>
+        <div class="form-group">
+          <label for="enter-pass">Senha</label>
+          <input type="password" id="enter-pass" required>
+        </div>
+        <button type="submit" class="btn-primary btn-full">Entrar</button>
+      </form>
+
+      <form id="form-create" class="login-form" style="display:none;">
+        <div class="form-group">
+          <label for="create-code">Escolha um código</label>
+          <input type="text" id="create-code" placeholder="ex: joao-maria" minlength="3" maxlength="30" required>
+          <span class="form-hint">Mínimo 3 caracteres, sem espaços</span>
+        </div>
+        <div class="form-group">
+          <label for="create-pass">Defina uma senha</label>
+          <input type="password" id="create-pass" minlength="4" required>
+          <span class="form-hint">Mínimo 4 caracteres</span>
+        </div>
+        <button type="submit" class="btn-primary btn-full">Criar Sala</button>
+      </form>
+
+      <div id="login-error" class="login-error" style="display:none;"></div>
+      <div id="login-success" class="login-success" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- App (hidden until login) -->
+  <div id="app" style="display:none;">
+    <header>
+      <div class="header-content">
+        <h1>🎬 CineNotes</h1>
+        <p class="subtitle">Sala: <strong id="room-name"></strong></p>
+      </div>
+      <div class="header-actions">
+        <button id="btn-add" class="btn-primary">+ Adicionar Filme</button>
+        <button id="btn-config" class="btn-icon" title="Configurações">⚙️</button>
+        <button id="btn-logout" class="btn-icon" title="Sair">🚪</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="ranking">🏆 Ranking Geral</button>
+      <button class="tab" data-tab="ele">👨 Ranking Dele</button>
+      <button class="tab" data-tab="ela">👩 Ranking Dela</button>
+      <button class="tab" data-tab="todos">🎞️ Todos os Filmes</button>
+    </nav>
+
+    <div class="stats-bar" id="stats-bar"></div>
+
+    <div id="saving-indicator" class="saving-indicator" style="display:none;">Salvando...</div>
+
+    <main id="movie-grid" class="movie-grid"></main>
+
+    <div class="empty-state" id="empty-state" style="display:none;">
+      <div class="empty-icon">🎬</div>
+      <h2>Nenhum filme ainda!</h2>
+      <p>Comece adicionando os filmes que vocês assistiram juntos.</p>
+      <button class="btn-primary" onclick="openAddModal()">+ Adicionar Primeiro Filme</button>
+    </div>
+
+    <!-- Modal Adicionar Filme -->
+    <div class="modal-overlay" id="modal-add" style="display:none;">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Adicionar Filme</h2>
+          <button class="btn-close" onclick="closeModal('modal-add')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="search-section" id="search-section" style="display:none;">
+            <label>Buscar filme (TMDB)</label>
+            <div class="search-box">
+              <input type="text" id="search-input" placeholder="Digite o nome do filme..." autocomplete="off">
+              <button type="button" id="btn-search" class="btn-secondary">Buscar</button>
+            </div>
+            <div id="search-results" class="search-results"></div>
+          </div>
+          <div class="divider" id="search-divider" style="display:none;"><span>ou preencha manualmente</span></div>
+          <form id="form-movie" class="form-movie">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="movie-title">Título *</label>
+                <input type="text" id="movie-title" required>
+              </div>
+              <div class="form-group" style="width:100px;">
+                <label for="movie-year">Ano</label>
+                <input type="number" id="movie-year" min="1900" max="2030">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="movie-poster">URL do Cartaz</label>
+              <input type="text" id="movie-poster" placeholder="https://...">
+            </div>
+            <div class="poster-preview" id="poster-preview" style="display:none;">
+              <img id="poster-preview-img" src="" alt="Preview">
+            </div>
+            <div class="form-group">
+              <label for="movie-genre">Gênero</label>
+              <input type="text" id="movie-genre" placeholder="Ação, Drama, Comédia...">
+            </div>
+            <h3 class="section-title">Notas (0 a 10)</h3>
+            <div class="rating-section">
+              <div class="rating-option">
+                <input type="radio" name="rating-type" value="joint" id="rating-joint" checked>
+                <label for="rating-joint">Nota Conjunta</label>
+              </div>
+              <div class="rating-option">
+                <input type="radio" name="rating-type" value="individual" id="rating-individual">
+                <label for="rating-individual">Notas Individuais</label>
+              </div>
+            </div>
+            <div id="joint-rating" class="rating-inputs">
+              <div class="form-group">
+                <label>Nota do Casal</label>
+                <div class="rating-slider-group">
+                  <input type="range" id="rate-joint" min="0" max="10" step="0.5" value="7">
+                  <span class="rating-value" id="rate-joint-val">7.0</span>
+                </div>
+              </div>
+            </div>
+            <div id="individual-rating" class="rating-inputs" style="display:none;">
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label>Nota Dele 👨</label>
+                  <div class="rating-slider-group">
+                    <input type="range" id="rate-him" min="0" max="10" step="0.5" value="7">
+                    <span class="rating-value" id="rate-him-val">7.0</span>
+                  </div>
+                </div>
+                <div class="form-group flex-1">
+                  <label>Nota Dela 👩</label>
+                  <div class="rating-slider-group">
+                    <input type="range" id="rate-her" min="0" max="10" step="0.5" value="7">
+                    <span class="rating-value" id="rate-her-val">7.0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button type="submit" class="btn-primary btn-full">Adicionar Filme</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Editar Filme -->
+    <div class="modal-overlay" id="modal-edit" style="display:none;">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Editar Filme</h2>
+          <button class="btn-close" onclick="closeModal('modal-edit')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="form-edit" class="form-movie">
+            <input type="hidden" id="edit-id">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="edit-title">Título *</label>
+                <input type="text" id="edit-title" required>
+              </div>
+              <div class="form-group" style="width:100px;">
+                <label for="edit-year">Ano</label>
+                <input type="number" id="edit-year" min="1900" max="2030">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="edit-poster">URL do Cartaz</label>
+              <input type="text" id="edit-poster">
+            </div>
+            <div class="form-group">
+              <label for="edit-genre">Gênero</label>
+              <input type="text" id="edit-genre">
+            </div>
+            <h3 class="section-title">Notas (0 a 10)</h3>
+            <div class="rating-section">
+              <div class="rating-option">
+                <input type="radio" name="edit-rating-type" value="joint" id="edit-rating-joint" checked>
+                <label for="edit-rating-joint">Nota Conjunta</label>
+              </div>
+              <div class="rating-option">
+                <input type="radio" name="edit-rating-type" value="individual" id="edit-rating-individual">
+                <label for="edit-rating-individual">Notas Individuais</label>
+              </div>
+            </div>
+            <div id="edit-joint-rating" class="rating-inputs">
+              <div class="form-group">
+                <label>Nota do Casal</label>
+                <div class="rating-slider-group">
+                  <input type="range" id="edit-rate-joint" min="0" max="10" step="0.5" value="7">
+                  <span class="rating-value" id="edit-rate-joint-val">7.0</span>
+                </div>
+              </div>
+            </div>
+            <div id="edit-individual-rating" class="rating-inputs" style="display:none;">
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label>Nota Dele 👨</label>
+                  <div class="rating-slider-group">
+                    <input type="range" id="edit-rate-him" min="0" max="10" step="0.5" value="7">
+                    <span class="rating-value" id="edit-rate-him-val">7.0</span>
+                  </div>
+                </div>
+                <div class="form-group flex-1">
+                  <label>Nota Dela 👩</label>
+                  <div class="rating-slider-group">
+                    <input type="range" id="edit-rate-her" min="0" max="10" step="0.5" value="7">
+                    <span class="rating-value" id="edit-rate-her-val">7.0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary flex-1">Salvar Alterações</button>
+              <button type="button" class="btn-danger" id="btn-delete">Excluir</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Config -->
+    <div class="modal-overlay" id="modal-config" style="display:none;">
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h2>Configurações</h2>
+          <button class="btn-close" onclick="closeModal('modal-config')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="config-info">Para buscar filmes com cartazes automaticamente, cadastre uma chave gratuita em
+            <a href="https://www.themoviedb.org/settings/api" target="_blank">themoviedb.org</a>.</p>
+          <div class="form-group">
+            <label for="tmdb-key">API Key TMDB (v3 auth)</label>
+            <input type="text" id="tmdb-key" placeholder="Cole sua chave aqui...">
+          </div>
+          <button class="btn-primary btn-full" id="btn-save-config">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
