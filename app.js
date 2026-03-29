@@ -19,7 +19,13 @@ async function api(endpoint, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error('Erro no servidor. Verifique se o Blob Store está conectado ao projeto na Vercel.');
+  }
   if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
   return data;
 }
