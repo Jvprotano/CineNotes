@@ -19,7 +19,9 @@ module.exports = async (req, res) => {
       return res.status(404).json({ error: 'Sala não encontrada' });
     }
 
-    const response = await fetch(blobs[0].url);
+    const response = await fetch(blobs[0].url, {
+      headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+    });
     const data = await response.json();
 
     const hash = crypto.createHash('sha256').update(data.salt + password).digest('hex');
