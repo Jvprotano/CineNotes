@@ -1,8 +1,10 @@
 // ========== State ==========
 let movies = [];
+let watchlist = [];
 let currentTab = 'ranking';
 let selectedMovies = [];
 let searchResults = [];
+let addTarget = 'movies'; // 'movies' or 'watchlist'
 let session = JSON.parse(sessionStorage.getItem('cinenotes_session') || 'null');
 
 // ========== DOM ==========
@@ -39,6 +41,7 @@ async function saveToServer() {
       code: session.code,
       password: session.password,
       movies,
+      watchlist,
     });
   } catch (err) {
     console.error('Erro ao salvar:', err);
@@ -92,6 +95,42 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// ========== Slider ==========
+function scrollSlider(trackId, direction) {
+  const track = document.getElementById(trackId);
+  if (!track) return;
+  const scrollAmount = track.clientWidth * 0.75;
+  track.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
+}
+
+function updateSliderArrows(trackId) {
+  const track = document.getElementById(trackId);
+  if (!track) return;
+  const container = track.closest('.slider-container');
+  if (!container) return;
+  const leftArrow = container.querySelector('.slider-arrow-left');
+  const rightArrow = container.querySelector('.slider-arrow-right');
+
+  if (leftArrow) {
+    leftArrow.style.display = track.scrollLeft > 10 ? 'flex' : 'none';
+  }
+  if (rightArrow) {
+    const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 10;
+    rightArrow.style.display = atEnd ? 'none' : 'flex';
+  }
+}
+
+function initSlider(trackId) {
+  const track = document.getElementById(trackId);
+  if (!track) return;
+  track.addEventListener('scroll', () => updateSliderArrows(trackId));
+}
+
+window.addEventListener('resize', () => {
+  updateSliderArrows('watchlist-track');
+  updateSliderArrows('movie-grid');
+});
+
 // ========== Login / Auth ==========
 document.querySelectorAll('.login-tab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -135,6 +174,7 @@ document.getElementById('form-enter').addEventListener('submit', async (e) => {
     session = { code, password };
     sessionStorage.setItem('cinenotes_session', JSON.stringify(session));
     movies = data.movies || [];
+    watchlist = data.watchlist || [];
     enterApp();
   } catch (err) {
     showError(err.message);
@@ -154,6 +194,7 @@ document.getElementById('form-create').addEventListener('submit', async (e) => {
     session = { code, password };
     sessionStorage.setItem('cinenotes_session', JSON.stringify(session));
     movies = [];
+    watchlist = [];
     setTimeout(enterApp, 800);
   } catch (err) {
     showError(err.message);
@@ -164,6 +205,8 @@ function enterApp() {
   loginScreen.style.display = 'none';
   app.style.display = 'block';
   document.getElementById('room-name').textContent = session.code;
+  initSlider('watchlist-track');
+  initSlider('movie-grid');
   render();
 }
 
@@ -173,6 +216,7 @@ async function tryAutoLogin() {
   try {
     const data = await api('load', { code: session.code, password: session.password });
     movies = data.movies || [];
+    watchlist = data.watchlist || [];
     enterApp();
   } catch {
     session = null;
@@ -193,6 +237,8 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 
 // ========== Render ==========
 function render() {
+  renderWatchlist();
+
   let sorted = [...movies];
   let showRank = true;
   let ratingFn = getEffectiveRating;
@@ -219,13 +265,14 @@ function render() {
       break;
   }
 
-  // Fixed empty state logic
+  const rankingSlider = document.getElementById('ranking-slider');
+
   if (movies.length === 0) {
-    grid.style.display = 'none';
+    rankingSlider.style.display = 'none';
     emptyState.style.display = 'block';
   } else {
     emptyState.style.display = 'none';
-    grid.style.display = sorted.length > 0 ? 'grid' : 'none';
+    rankingSlider.style.display = sorted.length > 0 ? 'block' : 'none';
   }
 
   renderStats();
@@ -277,6 +324,46 @@ function render() {
       </div>
     `;
   }).join('');
+
+  setTimeout(() => updateSliderArrows('movie-grid'), 100);
+}
+
+// ========== Render Watchlist ==========
+function renderWatchlist() {
+  const section = document.getElementById('watchlist-section');
+  const track = document.getElementById('watchlist-track');
+  const countEl = document.getElementById('watchlist-count');
+
+  if (watchlist.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  countEl.textContent = `${watchlist.length} filme${watchlist.length > 1 ? 's' : ''}`;
+
+  track.innerHTML = watchlist.map(item => {
+    const posterHtml = item.poster
+      ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster>🎬</div>'">`
+      : `<div class="no-poster">🎬</div>`;
+
+    return `
+      <div class="watchlist-card">
+        <div class="poster-container">${posterHtml}</div>
+        <div class="card-info">
+          <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+          ${item.year ? `<div class="card-year">${item.year}</div>` : ''}
+          ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ''}
+          <div class="watchlist-actions">
+            <button class="btn-watched" onclick="openMarkWatchedModal('${item.id}')" title="Marcar como assistido">✓ Assistido</button>
+            <button class="btn-remove-wl" onclick="removeFromWatchlist('${item.id}')" title="Remover">✕</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  setTimeout(() => updateSliderArrows('watchlist-track'), 100);
 }
 
 function renderStats() {
@@ -306,9 +393,10 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 
 // ========== Add Modal (Multi-Select) ==========
-document.getElementById('btn-add').addEventListener('click', openAddModal);
+document.getElementById('btn-add').addEventListener('click', () => openAddModal('movies'));
 
-function openAddModal() {
+function openAddModal(target) {
+  addTarget = target || 'movies';
   selectedMovies = [];
   searchResults = [];
   document.getElementById('search-input').value = '';
@@ -316,6 +404,15 @@ function openAddModal() {
   document.getElementById('manual-title').value = '';
   document.getElementById('manual-year').value = '';
   renderSelectedMovies();
+
+  // Update modal title based on target
+  const modalTitle = document.querySelector('#modal-add .modal-header h2');
+  if (addTarget === 'watchlist') {
+    modalTitle.textContent = 'Adicionar à Minha Lista';
+  } else {
+    modalTitle.textContent = 'Adicionar Filmes';
+  }
+
   document.getElementById('modal-add').style.display = 'flex';
 }
 
@@ -384,6 +481,7 @@ function renderSearchResults() {
 function isAlreadySelected(m) {
   if (selectedMovies.some(s => s.tmdbId && s.tmdbId === m.tmdbId)) return true;
   if (m.tmdbId && movies.some(mv => mv.tmdbId === m.tmdbId)) return true;
+  if (m.tmdbId && watchlist.some(wl => wl.tmdbId === m.tmdbId)) return true;
   return false;
 }
 
@@ -424,7 +522,12 @@ function renderSelectedMovies() {
 
   section.style.display = 'block';
   count.textContent = selectedMovies.length;
-  btn.textContent = `Adicionar ${selectedMovies.length} Filme${selectedMovies.length > 1 ? 's' : ''}`;
+
+  if (addTarget === 'watchlist') {
+    btn.textContent = `Adicionar ${selectedMovies.length} à Minha Lista`;
+  } else {
+    btn.textContent = `Adicionar ${selectedMovies.length} Filme${selectedMovies.length > 1 ? 's' : ''}`;
+  }
 
   list.innerHTML = selectedMovies.map((m, i) => {
     const thumb = m.posterThumb || m.poster;
@@ -470,20 +573,35 @@ document.getElementById('manual-title').addEventListener('keydown', (e) => {
 async function submitSelectedMovies() {
   if (selectedMovies.length === 0) return;
 
-  for (const sm of selectedMovies) {
-    movies.push({
-      id: generateId(),
-      tmdbId: sm.tmdbId || null,
-      title: sm.title,
-      year: sm.year ? parseInt(sm.year) : null,
-      poster: sm.poster || null,
-      genre: sm.genre || null,
-      overview: sm.overview || null,
-      ratingJoint: null,
-      ratingHim: null,
-      ratingHer: null,
-      dateAdded: new Date().toISOString().slice(0, 10),
-    });
+  if (addTarget === 'watchlist') {
+    for (const sm of selectedMovies) {
+      watchlist.push({
+        id: generateId(),
+        tmdbId: sm.tmdbId || null,
+        title: sm.title,
+        year: sm.year ? parseInt(sm.year) : null,
+        poster: sm.poster || null,
+        genre: sm.genre || null,
+        overview: sm.overview || null,
+        dateAdded: new Date().toISOString().slice(0, 10),
+      });
+    }
+  } else {
+    for (const sm of selectedMovies) {
+      movies.push({
+        id: generateId(),
+        tmdbId: sm.tmdbId || null,
+        title: sm.title,
+        year: sm.year ? parseInt(sm.year) : null,
+        poster: sm.poster || null,
+        genre: sm.genre || null,
+        overview: sm.overview || null,
+        ratingJoint: null,
+        ratingHim: null,
+        ratingHer: null,
+        dateAdded: new Date().toISOString().slice(0, 10),
+      });
+    }
   }
 
   selectedMovies = [];
@@ -491,6 +609,76 @@ async function submitSelectedMovies() {
   render();
   await saveToServer();
 }
+
+// ========== Watchlist Actions ==========
+function openMarkWatchedModal(watchlistId) {
+  const item = watchlist.find(w => w.id === watchlistId);
+  if (!item) return;
+
+  document.getElementById('mark-watched-id').value = item.id;
+  document.getElementById('mark-watched-title').textContent = item.title;
+
+  document.getElementById('mark-rating-joint').checked = true;
+  document.getElementById('mark-joint-rating').style.display = 'block';
+  document.getElementById('mark-individual-rating').style.display = 'none';
+  document.getElementById('mark-rate-joint').value = 7;
+  document.getElementById('mark-rate-him').value = 7;
+  document.getElementById('mark-rate-her').value = 7;
+  updateSliderDisplay('mark-rate-joint', 'mark-rate-joint-val');
+  updateSliderDisplay('mark-rate-him', 'mark-rate-him-val');
+  updateSliderDisplay('mark-rate-her', 'mark-rate-her-val');
+
+  document.getElementById('modal-mark-watched').style.display = 'flex';
+}
+
+async function submitMarkWatched() {
+  const id = document.getElementById('mark-watched-id').value;
+  const idx = watchlist.findIndex(w => w.id === id);
+  if (idx === -1) return;
+
+  const item = watchlist[idx];
+  const isJoint = document.getElementById('mark-rating-joint').checked;
+
+  movies.push({
+    id: generateId(),
+    tmdbId: item.tmdbId,
+    title: item.title,
+    year: item.year,
+    poster: item.poster,
+    genre: item.genre,
+    overview: item.overview,
+    ratingJoint: isJoint ? parseFloat(document.getElementById('mark-rate-joint').value) : null,
+    ratingHim: !isJoint ? parseFloat(document.getElementById('mark-rate-him').value) : null,
+    ratingHer: !isJoint ? parseFloat(document.getElementById('mark-rate-her').value) : null,
+    dateAdded: new Date().toISOString().slice(0, 10),
+  });
+
+  watchlist.splice(idx, 1);
+  closeModal('modal-mark-watched');
+  render();
+  await saveToServer();
+}
+
+async function removeFromWatchlist(id) {
+  if (!confirm('Remover este filme da sua lista?')) return;
+  watchlist = watchlist.filter(w => w.id !== id);
+  render();
+  await saveToServer();
+}
+
+// Mark-watched rating type toggle
+document.querySelectorAll('input[name="mark-rating-type"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    const isJoint = document.getElementById('mark-rating-joint').checked;
+    document.getElementById('mark-joint-rating').style.display = isJoint ? 'block' : 'none';
+    document.getElementById('mark-individual-rating').style.display = isJoint ? 'none' : 'block';
+  });
+});
+
+// Mark-watched slider displays
+['mark-rate-joint', 'mark-rate-him', 'mark-rate-her'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => updateSliderDisplay(id, id + '-val'));
+});
 
 // ========== Detail Modal ==========
 async function openDetailModal(movieId) {

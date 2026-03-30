@@ -148,6 +148,7 @@
       </div>
       <div class="header-actions">
         <button id="btn-add" class="btn-primary">+ Adicionar Filmes</button>
+        <button id="btn-watchlist-add" class="btn-secondary" onclick="openAddModal('watchlist')">+ Minha Lista</button>
         <button id="btn-logout" class="btn-icon" title="Sair">🚪</button>
       </div>
     </header>
@@ -163,7 +164,25 @@
 
     <div id="saving-indicator" class="saving-indicator" style="display:none;">Salvando...</div>
 
-    <main id="movie-grid" class="movie-grid"></main>
+    <!-- Minha Lista (Watchlist) Section -->
+    <section class="slider-section" id="watchlist-section" style="display:none;">
+      <div class="slider-header">
+        <h2>📋 Minha Lista</h2>
+        <span class="slider-count" id="watchlist-count"></span>
+      </div>
+      <div class="slider-container">
+        <button class="slider-arrow slider-arrow-left" onclick="scrollSlider('watchlist-track', -1)">‹</button>
+        <div class="slider-track" id="watchlist-track"></div>
+        <button class="slider-arrow slider-arrow-right" onclick="scrollSlider('watchlist-track', 1)">›</button>
+      </div>
+    </section>
+
+    <!-- Ranking Slider -->
+    <div class="slider-container slider-main" id="ranking-slider">
+      <button class="slider-arrow slider-arrow-left" onclick="scrollSlider('movie-grid', -1)">‹</button>
+      <main class="slider-track" id="movie-grid"></main>
+      <button class="slider-arrow slider-arrow-right" onclick="scrollSlider('movie-grid', 1)">›</button>
+    </div>
 
     <div class="empty-state" id="empty-state" style="display:none;">
       <div class="empty-icon">🎬</div>
@@ -296,6 +315,61 @@
         </div>
         <div class="modal-body" id="detail-content">
           <!-- Dynamic content rendered by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Marcar como Assistido -->
+    <div class="modal-overlay" id="modal-mark-watched" style="display:none;">
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h2>Marcar como Assistido</h2>
+          <button class="btn-close" onclick="closeModal('modal-mark-watched')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p id="mark-watched-title" style="font-weight:600; font-size:1.1rem; margin-bottom:16px;"></p>
+          <input type="hidden" id="mark-watched-id">
+          <h3 class="section-title">Notas (0 a 10)</h3>
+          <div class="rating-section">
+            <div class="rating-option">
+              <input type="radio" name="mark-rating-type" value="joint" id="mark-rating-joint" checked>
+              <label for="mark-rating-joint">Nota Conjunta</label>
+            </div>
+            <div class="rating-option">
+              <input type="radio" name="mark-rating-type" value="individual" id="mark-rating-individual">
+              <label for="mark-rating-individual">Notas Individuais</label>
+            </div>
+          </div>
+          <div id="mark-joint-rating" class="rating-inputs">
+            <div class="form-group">
+              <label>Nota do Casal</label>
+              <div class="rating-slider-group">
+                <input type="range" id="mark-rate-joint" min="0" max="10" step="0.5" value="7">
+                <span class="rating-value" id="mark-rate-joint-val">7.0</span>
+              </div>
+            </div>
+          </div>
+          <div id="mark-individual-rating" class="rating-inputs" style="display:none;">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label>Nota Dele 👨</label>
+                <div class="rating-slider-group">
+                  <input type="range" id="mark-rate-him" min="0" max="10" step="0.5" value="7">
+                  <span class="rating-value" id="mark-rate-him-val">7.0</span>
+                </div>
+              </div>
+              <div class="form-group flex-1">
+                <label>Nota Dela 👩</label>
+                <div class="rating-slider-group">
+                  <input type="range" id="mark-rate-her" min="0" max="10" step="0.5" value="7">
+                  <span class="rating-value" id="mark-rate-her-val">7.0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions" style="margin-top:16px;">
+            <button class="btn-primary flex-1" onclick="submitMarkWatched()">Salvar e Mover para Ranking</button>
+          </div>
         </div>
       </div>
     </div>
