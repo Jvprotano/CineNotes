@@ -117,7 +117,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>
@@ -127,16 +127,13 @@
         <div class="login-card-glow"></div>
         <div class="login-identity">
           <img src="assets/logo.png" alt="CineNotes" class="login-logo" />
+          <h1 class="login-title">
+            <span class="brand-wordmark">CineNotes</span>
+          </h1>
           <p class="login-subtitle">
             Um espaço privado para o casal guardar a watchlist, avaliar o que já
             viu e transformar cada sessão em um ranking bonito de acompanhar.
           </p>
-        </div>
-
-        <div class="login-highlights" aria-hidden="true">
-          <span>Sem cadastro</span>
-          <span>Watchlist</span>
-          <span>Ranking do casal</span>
         </div>
 
         <div class="login-tabs">
@@ -160,6 +157,12 @@
           </div>
           <button type="submit" class="btn-primary btn-full">Entrar</button>
         </form>
+
+        <div class="login-highlights" aria-hidden="true">
+          <span>Sem cadastro</span>
+          <span>Watchlist</span>
+          <span>Ranking do casal</span>
+        </div>
 
         <form id="form-create" class="login-form" style="display: none">
           <div class="form-group">
@@ -204,7 +207,7 @@
                       alt="CineNotes"
                       class="header-logo"
                     />
-                    CineNotes
+                    <span class="brand-wordmark">CineNotes</span>
                   </h1>
                   <div class="room-pill">
                     <span>Sala ativa</span>
@@ -389,9 +392,6 @@
                   <h2 id="ranking-title">
                     <i data-lucide="trophy"></i> Ranking
                   </h2>
-                  <p class="slider-support">
-                    O placar definitivo das sessões que já passaram pelo casal.
-                  </p>
                 </div>
                 <span class="slider-count" id="ranking-count"></span>
               </div>

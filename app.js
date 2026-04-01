@@ -1505,6 +1505,87 @@ function formatRating(val) {
   return val !== null && val !== undefined ? val.toFixed(1) : "--";
 }
 
+function showEmptyState({ kicker, title, description, actionLabel, action }) {
+  emptyState.innerHTML = `
+    <div class="empty-state-panel">
+      <img src="assets/logo.png" alt="CineNotes" class="empty-icon" />
+      <span class="empty-kicker">${escapeHtml(kicker)}</span>
+      <h2>${escapeHtml(title)}</h2>
+      <p>${escapeHtml(description)}</p>
+      <button class="btn-primary" onclick="${action}">${escapeHtml(actionLabel)}</button>
+    </div>
+  `;
+  emptyState.style.display = "block";
+}
+
+function getTabEmptyState() {
+  switch (currentTab) {
+    case "ranking":
+      return {
+        kicker: "Ranking vazio",
+        title: "Ainda não existe ranking por aqui",
+        description:
+          "Adicionem os filmes que vocês já assistiram e preencham as notas para começar o ranking do casal.",
+        actionLabel: "Adicionar filmes assistidos",
+        action: "openAddModal('movies')",
+      };
+    case "ele":
+      return movies.length === 0
+        ? {
+            kicker: "Sem filmes",
+            title: "Ainda não há filmes para o ranking dele",
+            description:
+              "Adicionem os filmes que vocês já assistiram e depois registrem as notas dele para liberar esta visão.",
+            actionLabel: "Adicionar filmes assistidos",
+            action: "openAddModal('movies')",
+          }
+        : {
+            kicker: "Notas pendentes",
+            title: "Ainda faltam as notas dele",
+            description:
+              "Editem os filmes já assistidos e preencham as notas dele para montar esse ranking.",
+            actionLabel: "Adicionar notas",
+            action: `openEditModal('${movies[0]?.id || ""}')`,
+          };
+    case "ela":
+      return movies.length === 0
+        ? {
+            kicker: "Sem filmes",
+            title: "Ainda não há filmes para o ranking dela",
+            description:
+              "Adicionem os filmes que vocês já assistiram e depois registrem as notas dela para liberar esta visão.",
+            actionLabel: "Adicionar filmes assistidos",
+            action: "openAddModal('movies')",
+          }
+        : {
+            kicker: "Notas pendentes",
+            title: "Ainda faltam as notas dela",
+            description:
+              "Editem os filmes já assistidos e preencham as notas dela para montar esse ranking.",
+            actionLabel: "Adicionar notas",
+            action: `openEditModal('${movies[0]?.id || ""}')`,
+          };
+    case "todos":
+      return {
+        kicker: "Biblioteca vazia",
+        title: "Nenhum filme assistido foi adicionado",
+        description:
+          "Adicionem os filmes que vocês já viram e aproveitem para registrar as notas de cada sessão.",
+        actionLabel: "Adicionar filmes assistidos",
+        action: "openAddModal('movies')",
+      };
+    default:
+      return {
+        kicker: "Comecem por aqui",
+        title: "O ranking ainda está em branco",
+        description:
+          "Adicionem os filmes assistidos ou montem a watchlist para a experiência ficar completa.",
+        actionLabel: "Adicionar primeiro filme",
+        action: "openAddModal('watchlist')",
+      };
+  }
+}
+
 function render() {
   const isHome = currentTab === "inicio";
   const isRanking = ["inicio", "ranking", "ele", "ela"].includes(currentTab);
@@ -1568,12 +1649,18 @@ function render() {
 
   if (movies.length === 0) {
     rankingSection.style.display = "none";
-    emptyState.style.display = isHome ? "block" : "none";
+    showEmptyState(getTabEmptyState());
   } else {
-    emptyState.style.display = "none";
     rankingSection.style.display = isRanking || isTodos ? "block" : "none";
     rankingSlider.style.display = sorted.length > 0 ? "block" : "none";
     rankingCount.textContent = `${sorted.length} filme${sorted.length !== 1 ? "s" : ""}`;
+
+    if ((currentTab === "ele" || currentTab === "ela") && sorted.length === 0) {
+      rankingSection.style.display = "none";
+      showEmptyState(getTabEmptyState());
+    } else {
+      emptyState.style.display = "none";
+    }
   }
 
   if (isHome) {
