@@ -6,7 +6,7 @@ const GENRE_MAP = {
   10770: 'Telefilme', 53: 'Suspense', 10752: 'Guerra', 37: 'Faroeste',
 };
 
-function mapMovie(m) {
+function mapMovie(m, score) {
   return {
     tmdbId: m.id,
     title: m.title,
@@ -16,6 +16,7 @@ function mapMovie(m) {
     genre: (m.genre_ids || []).map(id => GENRE_MAP[id]).filter(Boolean).join(', '),
     overview: m.overview || '',
     voteAverage: m.vote_average || 0,
+    score: score !== undefined ? Math.round(score * 10) / 10 : undefined,
   };
 }
 
@@ -28,90 +29,79 @@ module.exports = async (req, res) => {
       return res.status(500).json({ error: 'TMDB_API_KEY não configurada no servidor.' });
     }
 
-    const { genreIds, excludeGenreIds, excludeTmdbIds, topMovieTmdbIds } = req.body || {};
+    const { seeds, dislikedGenreIds, excludeTmdbIds } = req.body || {};
     const exclude = new Set(excludeTmdbIds || []);
-    const seen = new Set();
+    const dislikedSet = new Set(dislikedGenreIds || []);
 
-    function dedup(movie) {
-      if (exclude.has(movie.id) || seen.has(movie.id)) return false;
-      seen.add(movie.id);
-      return true;
-    }
-
-    // Strategy 1: TMDB movie-based recommendations from top-rated movies
-    if (topMovieTmdbIds && topMovieTmdbIds.length > 0) {
-      const allResults = [];
-
-      // Fetch recommendations for up to 5 top-rated movies in parallel
-      const seeds = topMovieTmdbIds.slice(0, 5);
-      const fetches = seeds.map(async (tmdbId) => {
+    // ─── Strategy 1: Voting by frequency, weighted by seed rating ───
+    // For each seed movie (rated >= 8.5), fetch TMDB recommendations.
+    // Each recommended movie accumulates score = sum of seed ratings.
+    // Movies recommended by more (and higher-rated) seeds rank higher.
+    // TMDB vote_average is used as tiebreaker.
+    // Disliked genres apply a penalty (not a hard filter).
+    if (seeds && seeds.length > 0) {
+      // Fetch recommendations for ALL seed movies in parallel
+      const fetches = seeds.map(async ({ tmdbId, rating }) => {
         const url = `https://api.themoviedb.org/3/movie/${encodeURIComponent(tmdbId)}/recommendations?api_key=${encodeURIComponent(apiKey)}&language=pt-BR&page=1`;
         try {
           const response = await fetch(url);
           const data = await response.json();
-          return data.results || [];
+          return { results: data.results || [], rating };
         } catch {
-          return [];
+          return { results: [], rating };
         }
       });
 
       const resultSets = await Promise.all(fetches);
-      for (const results of resultSets) {
+
+      // Accumulate scores: movieId -> { movie, score, votes }
+      const scoreMap = new Map();
+
+      for (const { results, rating } of resultSets) {
         for (const m of results) {
-          if (dedup(m)) allResults.push(m);
+          if (exclude.has(m.id)) continue;
+
+          if (scoreMap.has(m.id)) {
+            const entry = scoreMap.get(m.id);
+            entry.score += rating;
+            entry.votes += 1;
+          } else {
+            scoreMap.set(m.id, { movie: m, score: rating, votes: 1 });
+          }
         }
       }
 
-      // Filter out excluded genres if provided
-      let filtered = allResults;
-      if (excludeGenreIds && excludeGenreIds.length > 0) {
-        const excludeSet = new Set(excludeGenreIds);
-        filtered = allResults.filter(m => {
-          const movieGenres = m.genre_ids || [];
-          // Exclude if ALL genres are in the excluded set (don't be too aggressive)
-          return !movieGenres.every(g => excludeSet.has(g));
-        });
-      }
+      if (scoreMap.size > 0) {
+        // Apply disliked genre penalty: reduce score by 30% per disliked genre
+        for (const entry of scoreMap.values()) {
+          const genres = entry.movie.genre_ids || [];
+          const dislikedCount = genres.filter(g => dislikedSet.has(g)).length;
+          if (dislikedCount > 0) {
+            entry.score *= Math.pow(0.7, dislikedCount);
+          }
+        }
 
-      if (filtered.length >= 5) {
-        return res.status(200).json({
-          results: filtered.slice(0, 20).map(mapMovie),
-          type: 'personalized',
-        });
+        // Sort by: score desc, then TMDB vote_average as tiebreaker
+        const sorted = [...scoreMap.values()]
+          .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return (b.movie.vote_average || 0) - (a.movie.vote_average || 0);
+          });
+
+        const results = sorted.slice(0, 20).map(e => mapMovie(e.movie, e.score));
+        return res.status(200).json({ results, type: 'personalized' });
       }
-      // If not enough results from movie-based recs, fall through to discover
     }
 
-    // Strategy 2: Genre-based discover with weighted genres and exclusions
-    if (genreIds && genreIds.length > 0) {
-      const genreParam = genreIds.join(',');
-      let url = `https://api.themoviedb.org/3/discover/movie?api_key=${encodeURIComponent(apiKey)}&language=pt-BR&sort_by=vote_average.desc&vote_count.gte=200&with_genres=${genreParam}&page=1`;
-
-      // Exclude disliked genres
-      if (excludeGenreIds && excludeGenreIds.length > 0) {
-        url += `&without_genres=${excludeGenreIds.join(',')}`;
-      }
-
-      const response = await fetch(url);
-      const data = await response.json();
-
-      const results = (data.results || [])
-        .filter(m => dedup(m))
-        .slice(0, 20)
-        .map(mapMovie);
-
-      return res.status(200).json({ results, type: 'personalized' });
-    }
-
-    // Strategy 3: Trending movies of the week
+    // ─── Strategy 2: Trending (fallback when no seeds) ───
     const url = `https://api.themoviedb.org/3/trending/movie/week?api_key=${encodeURIComponent(apiKey)}&language=pt-BR`;
     const response = await fetch(url);
     const data = await response.json();
 
     const results = (data.results || [])
-      .filter(m => dedup(m))
+      .filter(m => !exclude.has(m.id))
       .slice(0, 20)
-      .map(mapMovie);
+      .map(m => mapMovie(m));
 
     return res.status(200).json({ results, type: 'trending' });
   } catch (err) {
