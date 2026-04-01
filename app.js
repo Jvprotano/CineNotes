@@ -414,10 +414,10 @@ function render() {
     rankingCount.textContent = `${sorted.length} filme${sorted.length !== 1 ? "s" : ""}`;
   }
 
-  renderStats();
   if (isHome) {
     renderPendingRatingsBanner();
   } else {
+    renderStats();
     pendingBanner.style.display = "none";
   }
 
@@ -1518,6 +1518,7 @@ function render() {
     renderRecommendations();
     watchlistSection.style.display = "block";
   } else {
+    renderStats();
     watchlistSection.style.display = "none";
     recsSection.style.display = "none";
   }
@@ -1573,7 +1574,6 @@ function render() {
     rankingCount.textContent = `${sorted.length} filme${sorted.length !== 1 ? "s" : ""}`;
   }
 
-  renderStats();
   if (isHome) {
     renderPendingRatingsBanner();
   } else {
