@@ -207,7 +207,7 @@
           <p class="subtitle">Sala: <strong id="room-name"></strong></p>
         </div>
         <div class="header-actions">
-          <button id="btn-add" class="btn-primary">+ Adicionar Filmes</button>
+          <button id="btn-add" class="btn-primary">+ Adicionar</button>
           <button id="btn-logout" class="btn-icon" title="Sair"><i data-lucide="log-out"></i></button>
         </div>
       </header>
@@ -225,11 +225,16 @@
         Salvando...
       </div>
 
+      <div id="pending-ratings-banner" class="pending-ratings-banner" style="display: none"></div>
+
       <!-- Minha Lista (Watchlist) Section -->
       <section class="slider-section" id="watchlist-section">
         <div class="slider-header">
           <h2><i data-lucide="bookmark"></i> Minha Lista</h2>
-          <span class="slider-count" id="watchlist-count"></span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="slider-count" id="watchlist-count"></span>
+            <button class="btn-icon btn-refresh-recs" onclick="openAddModal('watchlist')" title="Adicionar à lista"><i data-lucide="plus"></i></button>
+          </div>
         </div>
         <div id="watchlist-content">
           <div class="slider-container">
@@ -322,7 +327,7 @@
         <img src="assets/logo.png" alt="CineNotes" class="empty-icon">
         <h2>Nenhum filme ainda!</h2>
         <p>Comece adicionando os filmes que vocês assistiram juntos.</p>
-        <button class="btn-primary" onclick="openAddModal()">
+        <button class="btn-primary" onclick="openAddModal('watchlist')">
           + Adicionar Primeiro Filme
         </button>
       </div>

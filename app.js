@@ -352,6 +352,7 @@ function render() {
   }
 
   renderStats();
+  renderPendingRatingsBanner();
 
   grid.innerHTML = sorted.map((movie, i) => {
     const rating = ratingFn(movie);
@@ -465,6 +466,28 @@ function renderStats() {
     ${rated.length > 0 ? `<span class="stat-item">⭐ Média geral: <strong>${avgAll.toFixed(1)}</strong></span>` : ''}
     ${best ? `<span class="stat-item">${icon('trophy', 14)} Melhor: <strong>${escapeHtml(best.title)}</strong> (${getEffectiveRating(best).toFixed(1)})</span>` : ''}
   `;
+  refreshIcons();
+}
+
+function renderPendingRatingsBanner() {
+  const banner = document.getElementById('pending-ratings-banner');
+  const unrated = movies.filter(m => getEffectiveRating(m) === null);
+
+  if (unrated.length === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  const names = unrated.slice(0, 3).map(m => `<strong>${escapeHtml(m.title)}</strong>`);
+  let text = names.join(', ');
+  if (unrated.length > 3) text += ` e mais ${unrated.length - 3}`;
+
+  banner.innerHTML = `
+    ${icon('alert-circle', 14)}
+    <span>${unrated.length} filme${unrated.length > 1 ? 's' : ''} sem nota: ${text}</span>
+    <button class="btn-pending-rate" onclick="openEditModal('${unrated[0].id}')">Avaliar agora</button>
+  `;
+  banner.style.display = 'flex';
   refreshIcons();
 }
 
@@ -608,16 +631,18 @@ function renderRecommendations() {
 
     return `
       <div class="watchlist-card recommendation-card">
+        <button class="btn-info" onclick="event.stopPropagation(); openRecommendationDetail(${item.tmdbId})" title="Detalhes do filme">${icon('info', 16)}</button>
         <div class="poster-container">${posterHtml}</div>
         <div class="card-info">
           <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
           ${item.year ? `<div class="card-year">${item.year}</div>` : ''}
           ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ''}
           ${item.voteAverage ? `<div class="card-tmdb-score">TMDB: ${item.voteAverage.toFixed(1)}</div>` : ''}
-          <div class="watchlist-actions">
+          <div class="watchlist-actions rec-actions">
             ${alreadyInList
               ? '<button class="btn-watched" disabled style="opacity:0.5;">Já adicionado</button>'
-              : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="Adicionar à minha lista">+ Minha Lista</button>`
+              : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="Adicionar à minha lista">+ Lista</button>
+                 <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="Marcar como assistido">✓ Assistido</button>`
             }
           </div>
         </div>
@@ -627,6 +652,61 @@ function renderRecommendations() {
 
   setTimeout(() => updateSliderArrows('recommendations-track'), 100);
   refreshIcons();
+}
+
+async function openRecommendationDetail(tmdbId) {
+  const item = recommendations.find(r => r.tmdbId === tmdbId);
+  if (!item) return;
+
+  const content = document.getElementById('detail-content');
+  // Build a movie-like object for the detail renderers
+  const movieObj = {
+    id: null,
+    tmdbId: item.tmdbId,
+    title: item.title,
+    year: item.year ? parseInt(item.year) : null,
+    poster: item.poster,
+    genre: item.genre,
+    overview: item.overview,
+    ratingJoint: null, ratingHim: null, ratingHer: null,
+  };
+
+  content.innerHTML = renderDetailBasic(movieObj, { isRecommendation: true, tmdbId });
+  refreshIcons();
+  document.getElementById('modal-detail').style.display = 'flex';
+
+  if (item.tmdbId) {
+    try {
+      const details = await api('details', { tmdbId: item.tmdbId });
+      content.innerHTML = renderDetailFull(movieObj, details, { isRecommendation: true, tmdbId });
+      refreshIcons();
+    } catch (err) {
+      console.error('Erro ao buscar detalhes:', err);
+    }
+  }
+}
+
+let markWatchedSource = null; // null = watchlist, { tmdbId, ... } = recommendation
+
+function markRecommendationAsWatched(tmdbId) {
+  const item = recommendations.find(r => r.tmdbId === tmdbId);
+  if (!item) return;
+
+  markWatchedSource = item;
+  document.getElementById('mark-watched-id').value = '';
+  document.getElementById('mark-watched-title').textContent = item.title;
+
+  document.getElementById('mark-rating-joint').checked = true;
+  document.getElementById('mark-joint-rating').style.display = 'block';
+  document.getElementById('mark-individual-rating').style.display = 'none';
+  document.getElementById('mark-rate-joint').value = 7;
+  document.getElementById('mark-rate-him').value = 7;
+  document.getElementById('mark-rate-her').value = 7;
+  updateSliderDisplay('mark-rate-joint', 'mark-rate-joint-val');
+  updateSliderDisplay('mark-rate-him', 'mark-rate-him-val');
+  updateSliderDisplay('mark-rate-her', 'mark-rate-her-val');
+
+  document.getElementById('modal-mark-watched').style.display = 'flex';
 }
 
 async function addRecommendationToWatchlist(tmdbId) {
@@ -661,7 +741,7 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 
 // ========== Add Modal (Multi-Select) ==========
-document.getElementById('btn-add').addEventListener('click', () => openAddModal('movies'));
+document.getElementById('btn-add').addEventListener('click', () => openAddModal('watchlist'));
 
 function openAddModal(target) {
   addTarget = target || 'movies';
@@ -885,6 +965,7 @@ function openMarkWatchedModal(watchlistId) {
   const item = watchlist.find(w => w.id === watchlistId);
   if (!item) return;
 
+  markWatchedSource = null; // from watchlist
   document.getElementById('mark-watched-id').value = item.id;
   document.getElementById('mark-watched-title').textContent = item.title;
 
@@ -902,28 +983,37 @@ function openMarkWatchedModal(watchlistId) {
 }
 
 async function submitMarkWatched() {
-  const id = document.getElementById('mark-watched-id').value;
-  const idx = watchlist.findIndex(w => w.id === id);
-  if (idx === -1) return;
-
-  const item = watchlist[idx];
   const isJoint = document.getElementById('mark-rating-joint').checked;
+  let item;
+
+  if (markWatchedSource) {
+    // Coming from a recommendation
+    item = markWatchedSource;
+    recommendations = recommendations.filter(r => r.tmdbId !== item.tmdbId);
+    markWatchedSource = null;
+  } else {
+    // Coming from watchlist
+    const id = document.getElementById('mark-watched-id').value;
+    const idx = watchlist.findIndex(w => w.id === id);
+    if (idx === -1) return;
+    item = watchlist[idx];
+    watchlist.splice(idx, 1);
+  }
 
   movies.push({
     id: generateId(),
     tmdbId: item.tmdbId,
     title: item.title,
-    year: item.year,
+    year: item.year ? parseInt(item.year) : null,
     poster: item.poster,
     genre: item.genre,
-    overview: item.overview,
+    overview: item.overview || null,
     ratingJoint: isJoint ? parseFloat(document.getElementById('mark-rate-joint').value) : null,
     ratingHim: !isJoint ? parseFloat(document.getElementById('mark-rate-him').value) : null,
     ratingHer: !isJoint ? parseFloat(document.getElementById('mark-rate-her').value) : null,
     dateAdded: new Date().toISOString().slice(0, 10),
   });
 
-  watchlist.splice(idx, 1);
   closeModal('modal-mark-watched');
   render();
   await saveToServer();
@@ -989,7 +1079,24 @@ function buildRatingHtml(movie) {
   return `<div class="detail-user-ratings">${parts.join('')}</div>`;
 }
 
-function renderDetailBasic(movie) {
+function renderDetailActions(movie, opts) {
+  if (opts && opts.isRecommendation) {
+    const tmdbId = opts.tmdbId;
+    return `
+      <div class="detail-actions">
+        <button class="btn-primary" onclick="closeModal('modal-detail'); addRecommendationToWatchlist(${tmdbId})">+ Minha Lista</button>
+        <button class="btn-secondary" onclick="closeModal('modal-detail'); markRecommendationAsWatched(${tmdbId})">✓ Assistido</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="detail-actions">
+      <button class="btn-primary" onclick="closeModal('modal-detail'); openEditModal('${movie.id}')">Editar Notas</button>
+    </div>
+  `;
+}
+
+function renderDetailBasic(movie, opts) {
   return `
     <div class="detail-header">
       ${movie.poster ? `<img class="detail-poster" src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}">` : '<div class="detail-poster-empty"><i data-lucide="clapperboard"></i></div>'}
@@ -1004,13 +1111,11 @@ function renderDetailBasic(movie) {
     </div>
     ${movie.overview ? `<div class="detail-section"><h3>Sinopse</h3><p>${escapeHtml(movie.overview)}</p></div>` : ''}
     ${movie.tmdbId ? '<div class="detail-loading">Carregando detalhes do TMDB...</div>' : ''}
-    <div class="detail-actions">
-      <button class="btn-primary" onclick="closeModal('modal-detail'); openEditModal('${movie.id}')">Editar Notas</button>
-    </div>
+    ${renderDetailActions(movie, opts)}
   `;
 }
 
-function renderDetailFull(movie, details) {
+function renderDetailFull(movie, details, opts) {
   const castHtml = (details.cast || []).map(c => `
     <div class="detail-cast-item">
       ${c.photo ? `<img src="${escapeHtml(c.photo)}" alt="${escapeHtml(c.name)}">` : '<div class="cast-no-photo"><i data-lucide="user"></i></div>'}
@@ -1043,9 +1148,7 @@ function renderDetailFull(movie, details) {
     </div>
     ${details.overview ? `<div class="detail-section"><h3>Sinopse</h3><p>${escapeHtml(details.overview)}</p></div>` : ''}
     ${castHtml ? `<div class="detail-section"><h3>Elenco</h3><div class="detail-cast-grid">${castHtml}</div></div>` : ''}
-    <div class="detail-actions">
-      <button class="btn-primary" onclick="closeModal('modal-detail'); openEditModal('${movie.id}')">Editar Notas</button>
-    </div>
+    ${renderDetailActions(movie, opts)}
   `;
 }
 

@@ -329,6 +329,41 @@ header h1 {
   font-weight: 500;
 }
 
+.pending-ratings-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin: 0 16px;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.25);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.pending-ratings-banner span {
+  flex: 1;
+}
+.pending-ratings-banner i {
+  color: var(--gold);
+  flex-shrink: 0;
+}
+.btn-pending-rate {
+  background: transparent;
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.btn-pending-rate:hover {
+  background: rgba(255, 193, 7, 0.15);
+}
+
 /* ========== Slider Section ========== */
 .slider-section {
   padding: 20px 32px;
@@ -1296,6 +1331,45 @@ header h1 {
   color: var(--gold);
   margin-bottom: 8px;
   font-weight: 600;
+}
+
+.rec-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.rec-actions .btn-watched,
+.rec-actions .btn-rec-watched {
+  font-size: 0.7rem;
+  padding: 4px 8px;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.recommendation-card {
+  position: relative;
+}
+.recommendation-card .btn-info {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.2s;
+}
+.recommendation-card .btn-info:hover {
+  background: rgba(0,0,0,0.85);
 }
 
 /* ========== Empty State ========== */
