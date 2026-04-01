@@ -1499,6 +1499,516 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ========== UI Overrides ==========
+function formatRating(val) {
+  return val !== null && val !== undefined ? val.toFixed(1) : "--";
+}
+
+function render() {
+  const isHome = currentTab === "inicio";
+  const isRanking = ["inicio", "ranking", "ele", "ela"].includes(currentTab);
+  const isTodos = currentTab === "todos";
+
+  const watchlistSection = document.getElementById("watchlist-section");
+  const recsSection = document.getElementById("recommendations-section");
+  const pendingBanner = document.getElementById("pending-ratings-banner");
+
+  if (isHome) {
+    renderWatchlist();
+    renderRecommendations();
+    watchlistSection.style.display = "block";
+  } else {
+    watchlistSection.style.display = "none";
+    recsSection.style.display = "none";
+  }
+
+  let sorted = [...movies];
+  let showRank = true;
+  let ratingFn = getEffectiveRating;
+  let rankingLabel = `${icon("trophy")} Ranking`;
+
+  switch (currentTab) {
+    case "inicio":
+    case "ranking":
+      sorted.sort(
+        (a, b) => (getEffectiveRating(b) ?? -1) - (getEffectiveRating(a) ?? -1),
+      );
+      rankingLabel = `${icon("trophy")} Ranking Geral`;
+      break;
+    case "ele":
+      sorted = sorted.filter((m) => getHisRating(m) !== null);
+      sorted.sort((a, b) => getHisRating(b) - getHisRating(a));
+      ratingFn = getHisRating;
+      rankingLabel = `${icon("user")} Ranking Dele`;
+      break;
+    case "ela":
+      sorted = sorted.filter((m) => getHerRating(m) !== null);
+      sorted.sort((a, b) => getHerRating(b) - getHerRating(a));
+      ratingFn = getHerRating;
+      rankingLabel = `${icon("heart")} Ranking Dela`;
+      break;
+    case "todos":
+      sorted.sort((a, b) =>
+        (b.dateAdded || "").localeCompare(a.dateAdded || ""),
+      );
+      showRank = false;
+      rankingLabel = `${icon("film")} Todos os Filmes`;
+      break;
+  }
+
+  const rankingSection = document.getElementById("ranking-section");
+  const rankingSlider = document.getElementById("ranking-slider");
+  const rankingTitle = document.getElementById("ranking-title");
+  const rankingCount = document.getElementById("ranking-count");
+
+  rankingTitle.innerHTML = rankingLabel;
+
+  if (movies.length === 0) {
+    rankingSection.style.display = "none";
+    emptyState.style.display = isHome ? "block" : "none";
+  } else {
+    emptyState.style.display = "none";
+    rankingSection.style.display = isRanking || isTodos ? "block" : "none";
+    rankingSlider.style.display = sorted.length > 0 ? "block" : "none";
+    rankingCount.textContent = `${sorted.length} filme${sorted.length !== 1 ? "s" : ""}`;
+  }
+
+  renderStats();
+  if (isHome) {
+    renderPendingRatingsBanner();
+  } else {
+    pendingBanner.style.display = "none";
+  }
+
+  grid.innerHTML = sorted
+    .map((movie, i) => {
+      const rating = ratingFn(movie);
+      const ratingClass = getRatingClass(rating);
+      const rank = i + 1;
+      const rankBadge =
+        showRank && rating !== null
+          ? `<div class="rank-badge${rank <= 3 ? ` rank-${rank}` : ""}">${rank}</div>`
+          : "";
+      const posterHtml = movie.poster
+        ? `<img src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
+        : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
+
+      const detailParts = [];
+      if (movie.ratingJoint !== null && movie.ratingJoint !== undefined) {
+        detailParts.push(`Conjunta: ${formatRating(movie.ratingJoint)}`);
+      }
+      if (movie.ratingHim !== null && movie.ratingHim !== undefined) {
+        detailParts.push(
+          `${icon("user", 14)} ${formatRating(movie.ratingHim)}`,
+        );
+      }
+      if (movie.ratingHer !== null && movie.ratingHer !== undefined) {
+        detailParts.push(
+          `${icon("heart", 14)} ${formatRating(movie.ratingHer)}`,
+        );
+      }
+
+      return `
+      <div class="movie-card" onclick="openEditModal('${movie.id}')">
+        ${rankBadge}
+        <button class="btn-info" onclick="event.stopPropagation(); openDetailModal('${movie.id}')" title="Detalhes do filme">${icon("info", 16)}</button>
+        <div class="poster-container">${posterHtml}</div>
+        <div class="card-info">
+          <div class="card-title" title="${escapeHtml(movie.title)}">${escapeHtml(movie.title)}</div>
+          ${movie.year ? `<div class="card-year">${movie.year}</div>` : ""}
+          ${movie.genre ? `<div class="card-genre">${escapeHtml(movie.genre)}</div>` : ""}
+          <div class="card-rating">
+            <span class="rating-badge ${ratingClass}">${rating !== null && rating !== undefined ? rating.toFixed(1) : "Sem nota"}</span>
+            ${
+              detailParts.length > 0
+                ? `<span class="card-rating-details">${detailParts.join(" &middot; ")}</span>`
+                : ""
+            }
+          </div>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  setTimeout(() => updateSliderArrows("movie-grid"), 100);
+  refreshIcons();
+}
+
+function renderWatchlist() {
+  const section = document.getElementById("watchlist-section");
+  const content = document.getElementById("watchlist-content");
+  const emptyEl = document.getElementById("watchlist-empty");
+  const track = document.getElementById("watchlist-track");
+  const countEl = document.getElementById("watchlist-count");
+
+  section.style.display = "block";
+
+  if (watchlist.length === 0) {
+    content.style.display = "none";
+    emptyEl.style.display = "flex";
+    countEl.textContent = "";
+    return;
+  }
+
+  emptyEl.style.display = "none";
+  content.style.display = "block";
+  countEl.textContent = `${watchlist.length} filme${watchlist.length > 1 ? "s" : ""}`;
+
+  track.innerHTML = watchlist
+    .map((item) => {
+      const posterHtml = item.poster
+        ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
+        : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
+
+      return `
+      <div class="watchlist-card">
+        <button class="btn-info" onclick="event.stopPropagation(); openWatchlistDetail('${item.id}')" title="Detalhes do filme">${icon("info", 16)}</button>
+        <div class="poster-container">${posterHtml}</div>
+        <div class="card-info">
+          <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+          ${item.year ? `<div class="card-year">${item.year}</div>` : ""}
+          ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ""}
+          <div class="watchlist-actions">
+            <button class="btn-watched" onclick="openMarkWatchedModal('${item.id}')" title="Marcar como assistido">${icon("check", 14)} Assistido</button>
+            <button class="btn-remove-wl" onclick="removeFromWatchlist('${item.id}')" title="Remover">${icon("x", 14)}</button>
+          </div>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  setTimeout(() => updateSliderArrows("watchlist-track"), 100);
+  refreshIcons();
+}
+
+function renderStats() {
+  if (movies.length === 0) {
+    statsBar.innerHTML = "";
+    return;
+  }
+
+  const total = movies.length;
+  const rated = movies.filter((m) => getEffectiveRating(m) !== null);
+  const avgAll =
+    rated.length > 0
+      ? rated.reduce((sum, movie) => sum + getEffectiveRating(movie), 0) /
+        rated.length
+      : 0;
+  const best =
+    rated.length > 0
+      ? [...rated].sort(
+          (a, b) => getEffectiveRating(b) - getEffectiveRating(a),
+        )[0]
+      : null;
+
+  statsBar.innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">${icon("clapperboard", 16)} Biblioteca</span>
+      <strong>${total}</strong>
+      <span class="stat-foot">filme${total > 1 ? "s" : ""} já entrou${total > 1 ? "ram" : "u"} no ranking</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">${icon("star", 16)} Média</span>
+      <strong>${rated.length > 0 ? avgAll.toFixed(1) : "--"}</strong>
+      <span class="stat-foot">nota consolidada do histórico do casal</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">${icon("bookmark", 16)} Watchlist</span>
+      <strong>${watchlist.length}</strong>
+      <span class="stat-foot">filme${watchlist.length === 1 ? "" : "s"} esperando a próxima sessão</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">${icon("trophy", 16)} Top atual</span>
+      <strong>${best ? getEffectiveRating(best).toFixed(1) : "--"}</strong>
+      <span class="stat-foot">${best ? escapeHtml(best.title) : "Adicionem notas para destacar um favorito"}</span>
+    </div>
+  `;
+  refreshIcons();
+}
+
+function renderPendingRatingsBanner() {
+  const banner = document.getElementById("pending-ratings-banner");
+  const unrated = movies.filter((m) => getEffectiveRating(m) === null);
+
+  if (unrated.length === 0) {
+    banner.style.display = "none";
+    return;
+  }
+
+  const names = unrated
+    .slice(0, 3)
+    .map((m) => `<strong>${escapeHtml(m.title)}</strong>`);
+  let text = names.join(", ");
+  if (unrated.length > 3) text += ` e mais ${unrated.length - 3}`;
+
+  banner.innerHTML = `
+    ${icon("alert-circle", 16)}
+    <span><strong>${unrated.length}</strong> filme${unrated.length > 1 ? "s" : ""} ainda precisa${unrated.length > 1 ? "m" : ""} de nota. Comecem por ${text}.</span>
+    <button class="btn-pending-rate" onclick="openEditModal('${unrated[0].id}')">Avaliar agora</button>
+  `;
+  banner.style.display = "flex";
+  refreshIcons();
+}
+
+function getGenreIdsFromItem(item) {
+  const genreNameToId = {
+    Ação: 28,
+    Aventura: 12,
+    Animação: 16,
+    Comédia: 35,
+    Crime: 80,
+    Documentário: 99,
+    Drama: 18,
+    Família: 10751,
+    Fantasia: 14,
+    História: 36,
+    Terror: 27,
+    Música: 10402,
+    Mistério: 9648,
+    Romance: 10749,
+    "Ficção Científica": 878,
+    Telefilme: 10770,
+    Suspense: 53,
+    Guerra: 10752,
+    Faroeste: 37,
+  };
+
+  if (!item.genre) return [];
+  return item.genre
+    .split(",")
+    .map((g) => g.trim())
+    .map((g) => genreNameToId[g])
+    .filter(Boolean);
+}
+
+function renderRecommendations() {
+  const section = document.getElementById("recommendations-section");
+  const track = document.getElementById("recommendations-track");
+  const typeEl = document.getElementById("recommendations-type");
+  const hintEl = document.getElementById("recommendations-hint");
+
+  if (recommendations.length === 0) {
+    section.style.display = "none";
+    return;
+  }
+
+  section.style.display = "block";
+
+  if (recommendationType === "personalized") {
+    const signalCount = buildRecommendationSignals().length;
+    typeEl.textContent = `Baseado em ${signalCount} sinais do perfil`;
+    hintEl.style.display = "none";
+  } else {
+    typeEl.textContent = "Em alta esta semana";
+    const signalCount = buildRecommendationSignals().length;
+    if (signalCount < 3) {
+      const remaining = 3 - signalCount;
+      hintEl.innerHTML = `${icon("info", 14)} Adicionem mais <strong>${remaining}</strong> filme${remaining > 1 ? "s" : ""} avaliado${remaining > 1 ? "s" : ""} ou salvo na watchlist para personalizar melhor.`;
+    } else {
+      hintEl.innerHTML = `${icon("sparkles", 14)} Não apareceu um conjunto forte de recomendações personalizadas com o histórico atual, então o app mostrou os destaques do momento.`;
+    }
+    hintEl.style.display = "inline-flex";
+  }
+
+  track.innerHTML = recommendations
+    .map((item) => {
+      const posterHtml = item.poster
+        ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
+        : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
+      const alreadyInList =
+        (item.tmdbId && movies.some((m) => m.tmdbId === item.tmdbId)) ||
+        (item.tmdbId && watchlist.some((w) => w.tmdbId === item.tmdbId));
+
+      return `
+      <div class="watchlist-card recommendation-card">
+        <button class="btn-info" onclick="event.stopPropagation(); openRecommendationDetail(${item.tmdbId})" title="Detalhes do filme">${icon("info", 16)}</button>
+        <div class="poster-container">${posterHtml}</div>
+        <div class="card-info">
+          <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+          ${item.year ? `<div class="card-year">${item.year}</div>` : ""}
+          ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ""}
+          ${item.voteAverage ? `<div class="card-tmdb-score">${icon("sparkles", 14)} TMDB ${item.voteAverage.toFixed(1)}</div>` : ""}
+          <div class="watchlist-actions rec-actions">
+            ${
+              alreadyInList
+                ? '<button class="btn-watched" disabled style="opacity:.55;">Já adicionado</button>'
+                : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="Adicionar à minha lista">${icon("plus", 14)} Lista</button>
+                   <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="Marcar como assistido">${icon("check", 14)} Assistido</button>`
+            }
+          </div>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  setTimeout(() => updateSliderArrows("recommendations-track"), 100);
+  refreshIcons();
+}
+
+function openAddModal(target) {
+  addTarget = target || "movies";
+  selectedMovies = [];
+  searchResults = [];
+  document.getElementById("search-input").value = "";
+  document.getElementById("search-results").innerHTML = "";
+  renderSelectedMovies();
+
+  const modalTitle = document.querySelector("#modal-add .modal-header h2");
+  modalTitle.textContent =
+    addTarget === "watchlist" ? "Adicionar à minha lista" : "Adicionar filmes";
+
+  document.getElementById("modal-add").style.display = "flex";
+}
+
+async function searchTMDB() {
+  const query = document.getElementById("search-input").value.trim();
+  if (!query) return;
+
+  const resultsDiv = document.getElementById("search-results");
+  resultsDiv.innerHTML = '<p class="inline-feedback">Buscando filmes...</p>';
+
+  try {
+    const data = await api("search", { query });
+    searchResults = data.results || [];
+
+    if (searchResults.length === 0) {
+      resultsDiv.innerHTML =
+        '<p class="inline-feedback">Nenhum resultado encontrado.</p>';
+      return;
+    }
+
+    renderSearchResults();
+  } catch (err) {
+    resultsDiv.innerHTML = `<p class="inline-feedback error">Erro: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderSearchResults() {
+  const resultsDiv = document.getElementById("search-results");
+  resultsDiv.innerHTML = searchResults
+    .map((m, i) => {
+      const alreadySelected = isAlreadySelected(m);
+      const posterHtml = m.posterThumb
+        ? `<img src="${escapeHtml(m.posterThumb)}" alt="">`
+        : `<div class="search-result-poster-fallback"><i data-lucide="clapperboard"></i></div>`;
+
+      return `
+      <div class="search-result-item ${alreadySelected ? "selected" : ""}">
+        ${posterHtml}
+        <div class="search-result-info">
+          <div class="title">${escapeHtml(m.title)}</div>
+          <div class="year">${m.year}${m.genre ? " &middot; " + escapeHtml(m.genre) : ""}</div>
+        </div>
+        <button class="btn-add-result ${alreadySelected ? "added" : ""}" onclick="addToSelected(${i})" ${alreadySelected ? "disabled" : ""}>
+          ${alreadySelected ? icon("check", 16) : icon("plus", 16)}
+        </button>
+      </div>`;
+    })
+    .join("");
+  refreshIcons();
+}
+
+function renderSelectedMovies() {
+  const section = document.getElementById("selected-section");
+  const list = document.getElementById("selected-list");
+  const count = document.getElementById("selected-count");
+  const btn = document.getElementById("btn-submit-selected");
+
+  if (selectedMovies.length === 0) {
+    section.style.display = "none";
+    return;
+  }
+
+  section.style.display = "block";
+  count.textContent = selectedMovies.length;
+  btn.textContent =
+    addTarget === "watchlist"
+      ? `Adicionar ${selectedMovies.length} à minha lista`
+      : `Adicionar ${selectedMovies.length} filme${selectedMovies.length > 1 ? "s" : ""}`;
+
+  list.innerHTML = selectedMovies
+    .map((m, i) => {
+      const thumb = m.posterThumb || m.poster;
+      return `
+      <div class="selected-item">
+        ${thumb ? `<img src="${escapeHtml(thumb)}" alt="">` : '<div class="selected-item-placeholder"><i data-lucide="clapperboard"></i></div>'}
+        <div class="selected-item-info">
+          <span class="title">${escapeHtml(m.title)}</span>
+          <span class="meta">${m.year || ""}${m.genre ? " &middot; " + escapeHtml(m.genre) : ""}</span>
+        </div>
+        <button class="btn-remove-selected" onclick="removeFromSelected(${i})" title="Remover">${icon("x", 14)}</button>
+      </div>`;
+    })
+    .join("");
+  refreshIcons();
+}
+
+function renderDetailActions(movie, opts) {
+  if (opts && opts.isRecommendation) {
+    return `
+      <div class="detail-actions">
+        <button class="btn-primary" onclick="closeModal('modal-detail'); addRecommendationToWatchlist(${opts.tmdbId})">${icon("plus", 14)} Minha lista</button>
+        <button class="btn-secondary" onclick="closeModal('modal-detail'); markRecommendationAsWatched(${opts.tmdbId})">${icon("check", 14)} Assistido</button>
+      </div>
+    `;
+  }
+
+  if (opts && opts.isWatchlist) {
+    return `
+      <div class="detail-actions">
+        <button class="btn-primary" onclick="closeModal('modal-detail'); openMarkWatchedModal('${opts.watchlistId}')">${icon("check", 14)} Assistido</button>
+        <button class="btn-secondary" onclick="closeModal('modal-detail'); removeFromWatchlist('${opts.watchlistId}')">${icon("trash-2", 14)} Remover</button>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="detail-actions">
+      <button class="btn-primary" onclick="closeModal('modal-detail'); openEditModal('${movie.id}')">${icon("pencil", 14)} Editar notas</button>
+    </div>
+  `;
+}
+
+function renderDetailFull(movie, details, opts) {
+  const castHtml = (details.cast || [])
+    .map(
+      (c) => `
+    <div class="detail-cast-item">
+      ${c.photo ? `<img src="${escapeHtml(c.photo)}" alt="${escapeHtml(c.name)}">` : '<div class="cast-no-photo"><i data-lucide="user"></i></div>'}
+      <div class="cast-text">
+        <span class="cast-name">${escapeHtml(c.name)}</span>
+        <span class="cast-character">${escapeHtml(c.character)}</span>
+      </div>
+    </div>`,
+    )
+    .join("");
+
+  const headerStyle = details.backdrop
+    ? `style="background-image: linear-gradient(to bottom, rgba(9,23,43,0.48), rgba(6,15,29,0.98)), url('${escapeHtml(details.backdrop)}'); background-size: cover; background-position: center top;"`
+    : "";
+
+  return `
+    <div class="detail-header" ${headerStyle}>
+      ${details.poster || movie.poster ? `<img class="detail-poster" src="${escapeHtml(details.poster || movie.poster)}" alt="${escapeHtml(movie.title)}">` : '<div class="detail-poster-empty"><i data-lucide="clapperboard"></i></div>'}
+      <div class="detail-info">
+        <h2>${escapeHtml(details.title || movie.title)}</h2>
+        ${details.originalTitle && details.originalTitle !== details.title ? `<div class="detail-original-title">${escapeHtml(details.originalTitle)}</div>` : ""}
+        <div class="detail-meta">
+          ${details.year ? `<span>${details.year}</span>` : ""}
+          ${details.runtime ? `<span>${details.runtime} min</span>` : ""}
+          ${details.director ? `<span>Direção: ${escapeHtml(details.director)}</span>` : ""}
+        </div>
+        ${details.genres ? `<div class="detail-genres">${escapeHtml(details.genres)}</div>` : ""}
+        ${details.voteAverage ? `<div class="detail-tmdb-score">TMDB: <strong>${details.voteAverage.toFixed(1)}</strong></div>` : ""}
+        ${buildRatingHtml(movie)}
+      </div>
+    </div>
+    ${details.overview ? `<div class="detail-section"><h3>Sinopse</h3><p>${escapeHtml(details.overview)}</p></div>` : ""}
+    ${castHtml ? `<div class="detail-section"><h3>Elenco</h3><div class="detail-cast-grid">${castHtml}</div></div>` : ""}
+    ${renderDetailActions(movie, opts)}
+  `;
+}
+
 // ========== Init ==========
 refreshIcons();
 tryAutoLogin();
