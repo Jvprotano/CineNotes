@@ -522,13 +522,38 @@ const GENRE_NAME_TO_ID = {
   'Telefilme': 10770, 'Suspense': 53, 'Guerra': 10752, 'Faroeste': 37,
 };
 
+function computeSeedThreshold() {
+  // Adaptive threshold based on user's own rating profile: mean + 1 stddev
+  // This adapts to generous users (high avg), strict users (low avg), etc.
+  const rated = movies.filter(m => m.tmdbId && getEffectiveRating(m) !== null);
+  if (rated.length < 3) return null; // not enough data
+
+  const ratings = rated.map(m => getEffectiveRating(m));
+  const mean = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+  const variance = ratings.reduce((s, r) => s + (r - mean) ** 2, 0) / ratings.length;
+  const stddev = Math.sqrt(variance);
+
+  return mean + stddev;
+}
+
 function getSeedMovies() {
-  // Movies rated >= 8.5 with their TMDB IDs and ratings, for seeding recommendations
-  const MIN_RATING = 8.5;
-  return movies
-    .filter(m => m.tmdbId && getEffectiveRating(m) !== null && getEffectiveRating(m) >= MIN_RATING)
-    .sort((a, b) => getEffectiveRating(b) - getEffectiveRating(a))
-    .map(m => ({ tmdbId: m.tmdbId, rating: getEffectiveRating(m) }));
+  const MIN_SEEDS = 3;
+  let threshold = computeSeedThreshold();
+  if (threshold === null) return [];
+
+  const rated = movies
+    .filter(m => m.tmdbId && getEffectiveRating(m) !== null)
+    .sort((a, b) => getEffectiveRating(b) - getEffectiveRating(a));
+
+  // Get seeds above threshold
+  let seeds = rated.filter(m => getEffectiveRating(m) >= threshold);
+
+  // If too few seeds, relax threshold until we have at least MIN_SEEDS
+  if (seeds.length < MIN_SEEDS && rated.length >= MIN_SEEDS) {
+    seeds = rated.slice(0, MIN_SEEDS);
+  }
+
+  return seeds.map(m => ({ tmdbId: m.tmdbId, rating: getEffectiveRating(m) }));
 }
 
 function getDislikedGenreIds() {
@@ -548,9 +573,10 @@ function getDislikedGenreIds() {
     });
   });
 
-  // Genres that appear in high-rated movies should not be excluded
+  // Genres that appear in seed-level movies should not be excluded
+  const threshold = computeSeedThreshold() || 8;
   const likedGenres = new Set();
-  movies.filter(m => getEffectiveRating(m) !== null && getEffectiveRating(m) >= 8.5).forEach(m => {
+  movies.filter(m => getEffectiveRating(m) !== null && getEffectiveRating(m) >= threshold).forEach(m => {
     if (!m.genre) return;
     m.genre.split(',').map(g => g.trim()).forEach(g => {
       const id = GENRE_NAME_TO_ID[g];
@@ -607,14 +633,15 @@ function renderRecommendations() {
   section.style.display = 'block';
 
   if (recommendationType === 'personalized') {
-    const seedCount = movies.filter(m => getEffectiveRating(m) !== null && getEffectiveRating(m) >= 8.5).length;
+    const seedCount = getSeedMovies().length;
     typeEl.textContent = `Baseado nos seus ${seedCount} filmes favoritos`;
     hintEl.style.display = 'none';
   } else {
     typeEl.textContent = 'Em alta esta semana';
-    const highRated = movies.filter(m => getEffectiveRating(m) !== null && getEffectiveRating(m) >= 8.5);
-    if (highRated.length === 0) {
-      hintEl.innerHTML = `${icon('info', 14)} Avaliem filmes com nota <strong>8.5+</strong> para desbloquear recomendações personalizadas`;
+    const ratedCount = movies.filter(m => m.tmdbId && getEffectiveRating(m) !== null).length;
+    if (ratedCount < 3) {
+      const remaining = 3 - ratedCount;
+      hintEl.innerHTML = `${icon('info', 14)} Avaliem mais <strong>${remaining}</strong> filme${remaining > 1 ? 's' : ''} para desbloquear recomendações personalizadas`;
     } else {
       hintEl.textContent = 'Nenhuma recomendação encontrada a partir dos seus favoritos';
     }
