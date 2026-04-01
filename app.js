@@ -416,6 +416,7 @@ function render() {
 
   if (isHome) {
     renderPendingRatingsBanner();
+    statsBar.innerHTML = "";
   } else {
     renderStats();
     pendingBanner.style.display = "none";
@@ -1517,6 +1518,7 @@ function render() {
     renderWatchlist();
     renderRecommendations();
     watchlistSection.style.display = "block";
+    statsBar.innerHTML = "";
   } else {
     renderStats();
     watchlistSection.style.display = "none";
