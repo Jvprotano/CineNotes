@@ -165,24 +165,50 @@
     <div id="saving-indicator" class="saving-indicator" style="display:none;">Salvando...</div>
 
     <!-- Minha Lista (Watchlist) Section -->
-    <section class="slider-section" id="watchlist-section" style="display:none;">
+    <section class="slider-section" id="watchlist-section">
       <div class="slider-header">
         <h2>📋 Minha Lista</h2>
         <span class="slider-count" id="watchlist-count"></span>
       </div>
+      <div id="watchlist-content">
+        <div class="slider-container">
+          <button class="slider-arrow slider-arrow-left" onclick="scrollSlider('watchlist-track', -1)">‹</button>
+          <div class="slider-track" id="watchlist-track"></div>
+          <button class="slider-arrow slider-arrow-right" onclick="scrollSlider('watchlist-track', 1)">›</button>
+        </div>
+      </div>
+      <div id="watchlist-empty" class="section-empty-state" style="display:none;">
+        <p>Vocês ainda não adicionaram nada à lista do que querem ver</p>
+        <button class="btn-secondary" onclick="openAddModal('watchlist')">+ Adicionar à Lista</button>
+      </div>
+    </section>
+
+    <!-- Recomendações Section -->
+    <section class="slider-section" id="recommendations-section" style="display:none;">
+      <div class="slider-header">
+        <h2>✨ Recomendações</h2>
+        <span class="slider-count" id="recommendations-type"></span>
+      </div>
+      <div id="recommendations-hint" class="section-hint" style="display:none;"></div>
       <div class="slider-container">
-        <button class="slider-arrow slider-arrow-left" onclick="scrollSlider('watchlist-track', -1)">‹</button>
-        <div class="slider-track" id="watchlist-track"></div>
-        <button class="slider-arrow slider-arrow-right" onclick="scrollSlider('watchlist-track', 1)">›</button>
+        <button class="slider-arrow slider-arrow-left" onclick="scrollSlider('recommendations-track', -1)">‹</button>
+        <div class="slider-track" id="recommendations-track"></div>
+        <button class="slider-arrow slider-arrow-right" onclick="scrollSlider('recommendations-track', 1)">›</button>
       </div>
     </section>
 
     <!-- Ranking Slider -->
-    <div class="slider-container slider-main" id="ranking-slider">
-      <button class="slider-arrow slider-arrow-left" onclick="scrollSlider('movie-grid', -1)">‹</button>
-      <main class="slider-track" id="movie-grid"></main>
-      <button class="slider-arrow slider-arrow-right" onclick="scrollSlider('movie-grid', 1)">›</button>
-    </div>
+    <section class="slider-section" id="ranking-section">
+      <div class="slider-header">
+        <h2 id="ranking-title">🏆 Ranking</h2>
+        <span class="slider-count" id="ranking-count"></span>
+      </div>
+      <div class="slider-container" id="ranking-slider">
+        <button class="slider-arrow slider-arrow-left" onclick="scrollSlider('movie-grid', -1)">‹</button>
+        <main class="slider-track" id="movie-grid"></main>
+        <button class="slider-arrow slider-arrow-right" onclick="scrollSlider('movie-grid', 1)">›</button>
+      </div>
+    </section>
 
     <div class="empty-state" id="empty-state" style="display:none;">
       <div class="empty-icon">🎬</div>

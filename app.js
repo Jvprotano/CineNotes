@@ -1,6 +1,8 @@
 // ========== State ==========
 let movies = [];
 let watchlist = [];
+let recommendations = [];
+let recommendationType = 'trending'; // 'personalized' or 'trending'
 let currentTab = 'ranking';
 let selectedMovies = [];
 let searchResults = [];
@@ -129,6 +131,7 @@ function initSlider(trackId) {
 window.addEventListener('resize', () => {
   updateSliderArrows('watchlist-track');
   updateSliderArrows('movie-grid');
+  updateSliderArrows('recommendations-track');
 });
 
 // ========== Login / Auth ==========
@@ -207,7 +210,9 @@ function enterApp() {
   document.getElementById('room-name').textContent = session.code;
   initSlider('watchlist-track');
   initSlider('movie-grid');
+  initSlider('recommendations-track');
   render();
+  loadRecommendations();
 }
 
 // Auto-login if session exists
@@ -238,41 +243,54 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 // ========== Render ==========
 function render() {
   renderWatchlist();
+  renderRecommendations();
 
   let sorted = [...movies];
   let showRank = true;
   let ratingFn = getEffectiveRating;
+  let rankingLabel = '🏆 Ranking';
 
   switch (currentTab) {
     case 'ranking':
       sorted.sort((a, b) => (getEffectiveRating(b) ?? -1) - (getEffectiveRating(a) ?? -1));
       ratingFn = getEffectiveRating;
+      rankingLabel = '🏆 Ranking Geral';
       break;
     case 'ele':
       sorted = sorted.filter(m => getHisRating(m) !== null);
       sorted.sort((a, b) => getHisRating(b) - getHisRating(a));
       ratingFn = getHisRating;
+      rankingLabel = '👨 Ranking Dele';
       break;
     case 'ela':
       sorted = sorted.filter(m => getHerRating(m) !== null);
       sorted.sort((a, b) => getHerRating(b) - getHerRating(a));
       ratingFn = getHerRating;
+      rankingLabel = '👩 Ranking Dela';
       break;
     case 'todos':
       sorted.sort((a, b) => (b.dateAdded || '').localeCompare(a.dateAdded || ''));
       showRank = false;
       ratingFn = getEffectiveRating;
+      rankingLabel = '🎞️ Todos os Filmes';
       break;
   }
 
+  const rankingSection = document.getElementById('ranking-section');
   const rankingSlider = document.getElementById('ranking-slider');
+  const rankingTitle = document.getElementById('ranking-title');
+  const rankingCount = document.getElementById('ranking-count');
+
+  rankingTitle.textContent = rankingLabel;
 
   if (movies.length === 0) {
-    rankingSlider.style.display = 'none';
+    rankingSection.style.display = 'none';
     emptyState.style.display = 'block';
   } else {
     emptyState.style.display = 'none';
+    rankingSection.style.display = 'block';
     rankingSlider.style.display = sorted.length > 0 ? 'block' : 'none';
+    rankingCount.textContent = `${sorted.length} filme${sorted.length !== 1 ? 's' : ''}`;
   }
 
   renderStats();
@@ -331,15 +349,22 @@ function render() {
 // ========== Render Watchlist ==========
 function renderWatchlist() {
   const section = document.getElementById('watchlist-section');
+  const content = document.getElementById('watchlist-content');
+  const emptyEl = document.getElementById('watchlist-empty');
   const track = document.getElementById('watchlist-track');
   const countEl = document.getElementById('watchlist-count');
 
+  section.style.display = 'block';
+
   if (watchlist.length === 0) {
-    section.style.display = 'none';
+    content.style.display = 'none';
+    emptyEl.style.display = 'flex';
+    countEl.textContent = '';
     return;
   }
 
-  section.style.display = 'block';
+  emptyEl.style.display = 'none';
+  content.style.display = 'block';
   countEl.textContent = `${watchlist.length} filme${watchlist.length > 1 ? 's' : ''}`;
 
   track.innerHTML = watchlist.map(item => {
@@ -380,6 +405,136 @@ function renderStats() {
     ${rated.length > 0 ? `<span class="stat-item">⭐ Média geral: <strong>${avgAll.toFixed(1)}</strong></span>` : ''}
     ${best ? `<span class="stat-item">🏆 Melhor: <strong>${escapeHtml(best.title)}</strong> (${getEffectiveRating(best).toFixed(1)})</span>` : ''}
   `;
+}
+
+// ========== Recommendations ==========
+// TMDB genre name -> ID reverse map
+const GENRE_NAME_TO_ID = {
+  'Ação': 28, 'Aventura': 12, 'Animação': 16, 'Comédia': 35,
+  'Crime': 80, 'Documentário': 99, 'Drama': 18, 'Família': 10751,
+  'Fantasia': 14, 'História': 36, 'Terror': 27, 'Música': 10402,
+  'Mistério': 9648, 'Romance': 10749, 'Ficção Científica': 878,
+  'Telefilme': 10770, 'Suspense': 53, 'Guerra': 10752, 'Faroeste': 37,
+};
+
+function getTopGenreIds() {
+  const MIN_RATED_MOVIES = 5;
+  const rated = movies.filter(m => getEffectiveRating(m) !== null && getEffectiveRating(m) >= 7);
+  if (rated.length < MIN_RATED_MOVIES) return null;
+
+  // Count genre frequency among well-rated movies
+  const genreCount = {};
+  rated.forEach(m => {
+    if (!m.genre) return;
+    m.genre.split(',').map(g => g.trim()).forEach(g => {
+      const id = GENRE_NAME_TO_ID[g];
+      if (id) genreCount[id] = (genreCount[id] || 0) + 1;
+    });
+  });
+
+  // Return top 3 genres
+  return Object.entries(genreCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([id]) => parseInt(id));
+}
+
+async function loadRecommendations() {
+  const section = document.getElementById('recommendations-section');
+  const track = document.getElementById('recommendations-track');
+
+  track.innerHTML = '<p style="padding:10px;color:var(--text-muted);white-space:nowrap;">Carregando recomendações...</p>';
+  section.style.display = 'block';
+
+  try {
+    const excludeTmdbIds = [
+      ...movies.filter(m => m.tmdbId).map(m => m.tmdbId),
+      ...watchlist.filter(w => w.tmdbId).map(w => w.tmdbId),
+    ];
+
+    const topGenres = getTopGenreIds();
+    const body = { excludeTmdbIds };
+    if (topGenres) body.genreIds = topGenres;
+
+    const data = await api('recommendations', body);
+    recommendations = data.results || [];
+    recommendationType = data.type || 'trending';
+    renderRecommendations();
+  } catch (err) {
+    console.error('Erro ao carregar recomendações:', err);
+    section.style.display = 'none';
+  }
+}
+
+function renderRecommendations() {
+  const section = document.getElementById('recommendations-section');
+  const track = document.getElementById('recommendations-track');
+  const typeEl = document.getElementById('recommendations-type');
+  const hintEl = document.getElementById('recommendations-hint');
+
+  if (recommendations.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+
+  if (recommendationType === 'personalized') {
+    typeEl.textContent = 'Baseado nos seus gostos';
+    hintEl.style.display = 'none';
+  } else {
+    typeEl.textContent = 'Em alta esta semana';
+    hintEl.textContent = 'Avaliem mais filmes para recomendações personalizadas';
+    hintEl.style.display = 'block';
+  }
+
+  track.innerHTML = recommendations.map(item => {
+    const posterHtml = item.poster
+      ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster>🎬</div>'">`
+      : `<div class="no-poster">🎬</div>`;
+
+    const alreadyInList = (item.tmdbId && movies.some(m => m.tmdbId === item.tmdbId)) ||
+                          (item.tmdbId && watchlist.some(w => w.tmdbId === item.tmdbId));
+
+    return `
+      <div class="watchlist-card recommendation-card">
+        <div class="poster-container">${posterHtml}</div>
+        <div class="card-info">
+          <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+          ${item.year ? `<div class="card-year">${item.year}</div>` : ''}
+          ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ''}
+          ${item.voteAverage ? `<div class="card-tmdb-score">TMDB: ${item.voteAverage.toFixed(1)}</div>` : ''}
+          <div class="watchlist-actions">
+            ${alreadyInList
+              ? '<button class="btn-watched" disabled style="opacity:0.5;">Já adicionado</button>'
+              : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="Adicionar à minha lista">+ Minha Lista</button>`
+            }
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  setTimeout(() => updateSliderArrows('recommendations-track'), 100);
+}
+
+async function addRecommendationToWatchlist(tmdbId) {
+  const item = recommendations.find(r => r.tmdbId === tmdbId);
+  if (!item) return;
+
+  watchlist.push({
+    id: generateId(),
+    tmdbId: item.tmdbId,
+    title: item.title,
+    year: item.year ? parseInt(item.year) : null,
+    poster: item.poster || null,
+    genre: item.genre || null,
+    overview: item.overview || null,
+    dateAdded: new Date().toISOString().slice(0, 10),
+  });
+
+  render();
+  await saveToServer();
 }
 
 // ========== Tabs ==========

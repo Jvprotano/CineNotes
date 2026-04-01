@@ -967,6 +967,43 @@ header h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; }
 .poster-preview { display: flex; justify-content: center; }
 .poster-preview img { max-height: 180px; border-radius: 8px; border: 1px solid var(--border); }
 
+/* ========== Section Empty State (inline) ========== */
+.section-empty-state {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.section-empty-state p {
+  flex: 1;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ========== Section Hint ========== */
+.section-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  background: rgba(255,215,0,0.08);
+  border-radius: 6px;
+  border-left: 3px solid var(--gold);
+}
+
+/* ========== Recommendation Card extras ========== */
+.card-tmdb-score {
+  font-size: 0.75rem;
+  color: var(--gold);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
 /* ========== Empty State ========== */
 .empty-state { text-align: center; padding: 80px 32px; }
 .empty-icon { font-size: 4rem; margin-bottom: 16px; }
@@ -1001,6 +1038,13 @@ header h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; }
 
   .btn-info { opacity: 1; }
   .slider-arrow { width: 32px; height: 32px; font-size: 1.1rem; }
+
+  .section-empty-state {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+    padding: 16px;
+  }
 }
 
 @media (max-width: 480px) {
