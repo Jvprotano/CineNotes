@@ -3,7 +3,7 @@ let movies = [];
 let watchlist = [];
 let recommendations = [];
 let recommendationType = 'trending'; // 'personalized' or 'trending'
-let currentTab = 'ranking';
+let currentTab = 'inicio';
 let selectedMovies = [];
 let searchResults = [];
 let addTarget = 'movies'; // 'movies' or 'watchlist'
@@ -300,8 +300,24 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 
 // ========== Render ==========
 function render() {
-  renderWatchlist();
-  renderRecommendations();
+  const isHome = currentTab === 'inicio';
+  const isRanking = ['inicio', 'ranking', 'ele', 'ela'].includes(currentTab);
+  const isTodos = currentTab === 'todos';
+
+  // Show/hide sections based on tab
+  const watchlistSection = document.getElementById('watchlist-section');
+  const recsSection = document.getElementById('recommendations-section');
+  const pendingBanner = document.getElementById('pending-ratings-banner');
+
+  if (isHome) {
+    renderWatchlist();
+    renderRecommendations();
+    watchlistSection.style.display = 'block';
+    // recsSection visibility controlled by renderRecommendations
+  } else {
+    watchlistSection.style.display = 'none';
+    recsSection.style.display = 'none';
+  }
 
   let sorted = [...movies];
   let showRank = true;
@@ -309,6 +325,7 @@ function render() {
   let rankingLabel = `${icon('trophy')} Ranking`;
 
   switch (currentTab) {
+    case 'inicio':
     case 'ranking':
       sorted.sort((a, b) => (getEffectiveRating(b) ?? -1) - (getEffectiveRating(a) ?? -1));
       ratingFn = getEffectiveRating;
@@ -343,16 +360,20 @@ function render() {
 
   if (movies.length === 0) {
     rankingSection.style.display = 'none';
-    emptyState.style.display = 'block';
+    emptyState.style.display = isHome ? 'block' : 'none';
   } else {
     emptyState.style.display = 'none';
-    rankingSection.style.display = 'block';
+    rankingSection.style.display = (isRanking || isTodos) ? 'block' : 'none';
     rankingSlider.style.display = sorted.length > 0 ? 'block' : 'none';
     rankingCount.textContent = `${sorted.length} filme${sorted.length !== 1 ? 's' : ''}`;
   }
 
   renderStats();
-  renderPendingRatingsBanner();
+  if (isHome) {
+    renderPendingRatingsBanner();
+  } else {
+    pendingBanner.style.display = 'none';
+  }
 
   grid.innerHTML = sorted.map((movie, i) => {
     const rating = ratingFn(movie);

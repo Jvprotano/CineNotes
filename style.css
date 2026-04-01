@@ -158,11 +158,15 @@ h6,
 /* ========== Header ========== */
 header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px 32px;
+  flex-direction: column;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border-bottom: 1px solid var(--border);
+}
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 32px 0;
 }
 
 header h1 {
@@ -278,10 +282,8 @@ header h1 {
 /* ========== Tabs ========== */
 .tabs {
   display: flex;
-  gap: 4px;
-  padding: 16px 32px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  gap: 2px;
+  padding: 12px 32px 0;
   overflow-x: auto;
 }
 
@@ -289,21 +291,23 @@ header h1 {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 0.9rem;
+  padding: 10px 16px;
+  border-radius: 8px 8px 0 0;
+  font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
+  border-bottom: 2px solid transparent;
 }
 .tab:hover {
-  background: var(--bg-card);
   color: var(--text);
+  background: rgba(255,255,255,0.04);
 }
 .tab.active {
-  background: var(--accent);
-  color: white;
+  background: rgba(229, 56, 59, 0.12);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 /* ========== Stats ========== */
@@ -1407,23 +1411,23 @@ header h1 {
 
 /* ========== Responsive ========== */
 @media (max-width: 768px) {
-  header {
+  .header-top {
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     text-align: center;
-    padding: 16px;
+    padding: 16px 16px 0;
   }
   .header-actions {
     flex-wrap: wrap;
     justify-content: center;
   }
   .tabs {
-    padding: 12px 16px;
-    gap: 2px;
+    padding: 8px 12px 0;
+    gap: 0;
   }
   .tab {
-    padding: 8px 14px;
-    font-size: 0.8rem;
+    padding: 8px 10px;
+    font-size: 0.75rem;
   }
   .slider-section {
     padding: 16px;

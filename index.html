@@ -202,22 +202,24 @@
     <!-- App (hidden until login) -->
     <div id="app" style="display: none">
       <header>
-        <div class="header-content">
-          <h1><img src="assets/logo.png" alt="CineNotes" class="header-logo"> CineNotes</h1>
-          <p class="subtitle">Sala: <strong id="room-name"></strong></p>
+        <div class="header-top">
+          <div class="header-content">
+            <h1><img src="assets/logo.png" alt="CineNotes" class="header-logo"> CineNotes</h1>
+            <p class="subtitle">Sala: <strong id="room-name"></strong></p>
+          </div>
+          <div class="header-actions">
+            <button id="btn-add" class="btn-primary">+ Adicionar</button>
+            <button id="btn-logout" class="btn-icon" title="Sair"><i data-lucide="log-out"></i></button>
+          </div>
         </div>
-        <div class="header-actions">
-          <button id="btn-add" class="btn-primary">+ Adicionar</button>
-          <button id="btn-logout" class="btn-icon" title="Sair"><i data-lucide="log-out"></i></button>
-        </div>
+        <nav class="tabs">
+          <button class="tab active" data-tab="inicio"><i data-lucide="home"></i> Início</button>
+          <button class="tab" data-tab="ranking"><i data-lucide="trophy"></i> Ranking</button>
+          <button class="tab" data-tab="ele"><i data-lucide="user"></i> Dele</button>
+          <button class="tab" data-tab="ela"><i data-lucide="heart"></i> Dela</button>
+          <button class="tab" data-tab="todos"><i data-lucide="film"></i> Todos</button>
+        </nav>
       </header>
-
-      <nav class="tabs">
-        <button class="tab active" data-tab="ranking"><i data-lucide="trophy"></i> Ranking Geral</button>
-        <button class="tab" data-tab="ele"><i data-lucide="user"></i> Ranking Dele</button>
-        <button class="tab" data-tab="ela"><i data-lucide="heart"></i> Ranking Dela</button>
-        <button class="tab" data-tab="todos"><i data-lucide="film"></i> Todos os Filmes</button>
-      </nav>
 
       <div class="stats-bar" id="stats-bar"></div>
 
