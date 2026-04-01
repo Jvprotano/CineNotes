@@ -511,6 +511,7 @@ function renderWatchlist() {
 
       return `
       <div class="watchlist-card">
+        <button class="btn-info" onclick="event.stopPropagation(); openWatchlistDetail('${item.id}')" title="Detalhes do filme">${icon("info", 16)}</button>
         <div class="poster-container">${posterHtml}</div>
         <div class="card-info">
           <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
@@ -822,24 +823,57 @@ function renderRecommendations() {
   refreshIcons();
 }
 
-async function openRecommendationDetail(tmdbId) {
-  const item = recommendations.find((r) => r.tmdbId === tmdbId);
-  if (!item) return;
-
-  const content = document.getElementById("detail-content");
-  // Build a movie-like object for the detail renderers
-  const movieObj = {
-    id: null,
-    tmdbId: item.tmdbId,
+function buildDetailMovieObject(item) {
+  return {
+    id: item.id || null,
+    tmdbId: item.tmdbId || null,
     title: item.title,
     year: item.year ? parseInt(item.year) : null,
     poster: item.poster,
     genre: item.genre,
     overview: item.overview,
-    ratingJoint: null,
-    ratingHim: null,
-    ratingHer: null,
+    ratingJoint: item.ratingJoint ?? null,
+    ratingHim: item.ratingHim ?? null,
+    ratingHer: item.ratingHer ?? null,
   };
+}
+
+async function openWatchlistDetail(watchlistId) {
+  const item = watchlist.find((w) => w.id === watchlistId);
+  if (!item) return;
+
+  const content = document.getElementById("detail-content");
+  const movieObj = buildDetailMovieObject(item);
+
+  content.innerHTML = renderDetailBasic(movieObj, {
+    isWatchlist: true,
+    watchlistId,
+    tmdbId: item.tmdbId || null,
+  });
+  refreshIcons();
+  document.getElementById("modal-detail").style.display = "flex";
+
+  if (item.tmdbId) {
+    try {
+      const details = await api("details", { tmdbId: item.tmdbId });
+      content.innerHTML = renderDetailFull(movieObj, details, {
+        isWatchlist: true,
+        watchlistId,
+        tmdbId: item.tmdbId,
+      });
+      refreshIcons();
+    } catch (err) {
+      console.error("Erro ao buscar detalhes:", err);
+    }
+  }
+}
+
+async function openRecommendationDetail(tmdbId) {
+  const item = recommendations.find((r) => r.tmdbId === tmdbId);
+  if (!item) return;
+
+  const content = document.getElementById("detail-content");
+  const movieObj = buildDetailMovieObject(item);
 
   content.innerHTML = renderDetailBasic(movieObj, {
     isRecommendation: true,
@@ -1297,6 +1331,15 @@ function renderDetailActions(movie, opts) {
       <div class="detail-actions">
         <button class="btn-primary" onclick="closeModal('modal-detail'); addRecommendationToWatchlist(${tmdbId})">+ Minha Lista</button>
         <button class="btn-secondary" onclick="closeModal('modal-detail'); markRecommendationAsWatched(${tmdbId})">✓ Assistido</button>
+      </div>
+    `;
+  }
+  if (opts && opts.isWatchlist) {
+    const watchlistId = opts.watchlistId;
+    return `
+      <div class="detail-actions">
+        <button class="btn-primary" onclick="closeModal('modal-detail'); openMarkWatchedModal('${watchlistId}')">✓ Assistido</button>
+        <button class="btn-secondary" onclick="closeModal('modal-detail'); removeFromWatchlist('${watchlistId}')">Remover</button>
       </div>
     `;
   }
