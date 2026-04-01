@@ -17,8 +17,57 @@ const emptyState = document.getElementById('empty-state');
 const statsBar = document.getElementById('stats-bar');
 const savingIndicator = document.getElementById('saving-indicator');
 
+// ========== Dev Mode (localStorage fallback) ==========
+const DEV_MODE = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+function devGetRoom(code) {
+  return JSON.parse(localStorage.getItem(`cinenotes_room_${code}`) || 'null');
+}
+
+function devSetRoom(code, data) {
+  localStorage.setItem(`cinenotes_room_${code}`, JSON.stringify(data));
+}
+
+function devApi(endpoint, body) {
+  const { code, password } = body || {};
+  if (endpoint === 'create') {
+    const cleanCode = code.toLowerCase().trim().replace(/[^a-z0-9-_]/g, '');
+    if (cleanCode.length < 3 || cleanCode.length > 30)
+      throw new Error('Código deve ter entre 3 e 30 caracteres');
+    if (!password || password.length < 4)
+      throw new Error('Senha deve ter no mínimo 4 caracteres');
+    if (devGetRoom(cleanCode))
+      throw new Error('Este código já está em uso. Escolha outro.');
+    devSetRoom(cleanCode, { password, movies: [], watchlist: [], tmdbKey: '' });
+    return { ok: true };
+  }
+  if (endpoint === 'load') {
+    const cleanCode = code.toLowerCase().trim().replace(/[^a-z0-9-_]/g, '');
+    const room = devGetRoom(cleanCode);
+    if (!room) throw new Error('Sala não encontrada');
+    if (room.password !== password) throw new Error('Senha incorreta');
+    return { movies: room.movies || [], watchlist: room.watchlist || [], tmdbKey: room.tmdbKey || '' };
+  }
+  if (endpoint === 'save') {
+    const cleanCode = code.toLowerCase().trim().replace(/[^a-z0-9-_]/g, '');
+    const room = devGetRoom(cleanCode);
+    if (!room) throw new Error('Sala não encontrada');
+    if (room.password !== password) throw new Error('Senha incorreta');
+    room.movies = body.movies || room.movies;
+    room.watchlist = body.watchlist !== undefined ? body.watchlist : (room.watchlist || []);
+    if (body.tmdbKey !== undefined) room.tmdbKey = body.tmdbKey;
+    devSetRoom(cleanCode, room);
+    return { ok: true };
+  }
+  return null; // not handled — fall through to server
+}
+
 // ========== API Helpers ==========
 async function api(endpoint, body) {
+  // In dev mode, handle create/load/save locally
+  if (DEV_MODE && ['create', 'load', 'save'].includes(endpoint)) {
+    return devApi(endpoint, body);
+  }
   const res = await fetch(`/api/${endpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -51,6 +100,15 @@ async function saveToServer() {
   } finally {
     setTimeout(() => { savingIndicator.style.display = 'none'; }, 800);
   }
+}
+
+// ========== Icons ==========
+function icon(name, size = 18) {
+  return `<i data-lucide="${name}" style="width:${size}px;height:${size}px;display:inline-block;vertical-align:middle;"></i>`;
+}
+
+function refreshIcons() {
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // ========== Utility ==========
@@ -248,31 +306,31 @@ function render() {
   let sorted = [...movies];
   let showRank = true;
   let ratingFn = getEffectiveRating;
-  let rankingLabel = '🏆 Ranking';
+  let rankingLabel = `${icon('trophy')} Ranking`;
 
   switch (currentTab) {
     case 'ranking':
       sorted.sort((a, b) => (getEffectiveRating(b) ?? -1) - (getEffectiveRating(a) ?? -1));
       ratingFn = getEffectiveRating;
-      rankingLabel = '🏆 Ranking Geral';
+      rankingLabel = `${icon('trophy')} Ranking Geral`;
       break;
     case 'ele':
       sorted = sorted.filter(m => getHisRating(m) !== null);
       sorted.sort((a, b) => getHisRating(b) - getHisRating(a));
       ratingFn = getHisRating;
-      rankingLabel = '👨 Ranking Dele';
+      rankingLabel = `${icon('user')} Ranking Dele`;
       break;
     case 'ela':
       sorted = sorted.filter(m => getHerRating(m) !== null);
       sorted.sort((a, b) => getHerRating(b) - getHerRating(a));
       ratingFn = getHerRating;
-      rankingLabel = '👩 Ranking Dela';
+      rankingLabel = `${icon('heart')} Ranking Dela`;
       break;
     case 'todos':
       sorted.sort((a, b) => (b.dateAdded || '').localeCompare(a.dateAdded || ''));
       showRank = false;
       ratingFn = getEffectiveRating;
-      rankingLabel = '🎞️ Todos os Filmes';
+      rankingLabel = `${icon('film')} Todos os Filmes`;
       break;
   }
 
@@ -281,7 +339,7 @@ function render() {
   const rankingTitle = document.getElementById('ranking-title');
   const rankingCount = document.getElementById('ranking-count');
 
-  rankingTitle.textContent = rankingLabel;
+  rankingTitle.innerHTML = rankingLabel;
 
   if (movies.length === 0) {
     rankingSection.style.display = 'none';
@@ -307,18 +365,18 @@ function render() {
     }
 
     const posterHtml = movie.poster
-      ? `<img src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster>🎬</div>'">`
-      : `<div class="no-poster">🎬</div>`;
+      ? `<img src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
+      : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
 
     let detailParts = [];
     if (movie.ratingJoint !== null && movie.ratingJoint !== undefined) {
       detailParts.push(`Conjunta: ${formatRating(movie.ratingJoint)}`);
     }
     if (movie.ratingHim !== null && movie.ratingHim !== undefined) {
-      detailParts.push(`👨 ${formatRating(movie.ratingHim)}`);
+      detailParts.push(`${icon('user', 14)} ${formatRating(movie.ratingHim)}`);
     }
     if (movie.ratingHer !== null && movie.ratingHer !== undefined) {
-      detailParts.push(`👩 ${formatRating(movie.ratingHer)}`);
+      detailParts.push(`${icon('heart', 14)} ${formatRating(movie.ratingHer)}`);
     }
 
     const ratingDisplay = rating !== null && rating !== undefined ? rating.toFixed(1) : 'Sem nota';
@@ -344,6 +402,7 @@ function render() {
   }).join('');
 
   setTimeout(() => updateSliderArrows('movie-grid'), 100);
+  refreshIcons();
 }
 
 // ========== Render Watchlist ==========
@@ -369,8 +428,8 @@ function renderWatchlist() {
 
   track.innerHTML = watchlist.map(item => {
     const posterHtml = item.poster
-      ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster>🎬</div>'">`
-      : `<div class="no-poster">🎬</div>`;
+      ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
+      : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
 
     return `
       <div class="watchlist-card">
@@ -389,6 +448,7 @@ function renderWatchlist() {
   }).join('');
 
   setTimeout(() => updateSliderArrows('watchlist-track'), 100);
+  refreshIcons();
 }
 
 function renderStats() {
@@ -401,10 +461,11 @@ function renderStats() {
     : null;
 
   statsBar.innerHTML = `
-    <span class="stat-item">🎬 <strong>${total}</strong> filme${total > 1 ? 's' : ''}</span>
+    <span class="stat-item">${icon('clapperboard', 14)} <strong>${total}</strong> filme${total > 1 ? 's' : ''}</span>
     ${rated.length > 0 ? `<span class="stat-item">⭐ Média geral: <strong>${avgAll.toFixed(1)}</strong></span>` : ''}
-    ${best ? `<span class="stat-item">🏆 Melhor: <strong>${escapeHtml(best.title)}</strong> (${getEffectiveRating(best).toFixed(1)})</span>` : ''}
+    ${best ? `<span class="stat-item">${icon('trophy', 14)} Melhor: <strong>${escapeHtml(best.title)}</strong> (${getEffectiveRating(best).toFixed(1)})</span>` : ''}
   `;
+  refreshIcons();
 }
 
 // ========== Recommendations ==========
@@ -490,8 +551,8 @@ function renderRecommendations() {
 
   track.innerHTML = recommendations.map(item => {
     const posterHtml = item.poster
-      ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster>🎬</div>'">`
-      : `<div class="no-poster">🎬</div>`;
+      ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
+      : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
 
     const alreadyInList = (item.tmdbId && movies.some(m => m.tmdbId === item.tmdbId)) ||
                           (item.tmdbId && watchlist.some(w => w.tmdbId === item.tmdbId));
@@ -516,6 +577,7 @@ function renderRecommendations() {
   }).join('');
 
   setTimeout(() => updateSliderArrows('recommendations-track'), 100);
+  refreshIcons();
 }
 
 async function addRecommendationToWatchlist(tmdbId) {
@@ -616,7 +678,7 @@ function renderSearchResults() {
     const alreadySelected = isAlreadySelected(m);
     const posterHtml = m.posterThumb
       ? `<img src="${escapeHtml(m.posterThumb)}" alt="">`
-      : '<div style="width:40px;height:60px;background:#222;border-radius:4px;display:flex;align-items:center;justify-content:center;">🎬</div>';
+      : '<div style="width:40px;height:60px;background:#222;border-radius:4px;display:flex;align-items:center;justify-content:center;"><i data-lucide="clapperboard"></i></div>';
 
     return `
       <div class="search-result-item ${alreadySelected ? 'selected' : ''}">
@@ -631,6 +693,7 @@ function renderSearchResults() {
       </div>
     `;
   }).join('');
+  refreshIcons();
 }
 
 function isAlreadySelected(m) {
@@ -688,7 +751,7 @@ function renderSelectedMovies() {
     const thumb = m.posterThumb || m.poster;
     return `
       <div class="selected-item">
-        ${thumb ? `<img src="${escapeHtml(thumb)}" alt="">` : '<div class="selected-item-placeholder">🎬</div>'}
+        ${thumb ? `<img src="${escapeHtml(thumb)}" alt="">` : '<div class="selected-item-placeholder"><i data-lucide="clapperboard"></i></div>'}
         <div class="selected-item-info">
           <span class="title">${escapeHtml(m.title)}</span>
           <span class="meta">${m.year || ''}${m.genre ? ' · ' + escapeHtml(m.genre) : ''}</span>
@@ -697,6 +760,7 @@ function renderSelectedMovies() {
       </div>
     `;
   }).join('');
+  refreshIcons();
 }
 
 function addManualToSelected() {
@@ -842,12 +906,14 @@ async function openDetailModal(movieId) {
 
   const content = document.getElementById('detail-content');
   content.innerHTML = renderDetailBasic(movie);
+  refreshIcons();
   document.getElementById('modal-detail').style.display = 'flex';
 
   if (movie.tmdbId) {
     try {
       const details = await api('details', { tmdbId: movie.tmdbId });
       content.innerHTML = renderDetailFull(movie, details);
+      refreshIcons();
     } catch (err) {
       console.error('Erro ao buscar detalhes:', err);
     }
@@ -860,10 +926,10 @@ function buildRatingHtml(movie) {
     parts.push(`<span class="detail-rating-item">Nota Conjunta: <strong>${formatRating(movie.ratingJoint)}</strong></span>`);
   }
   if (movie.ratingHim !== null && movie.ratingHim !== undefined) {
-    parts.push(`<span class="detail-rating-item">👨 Dele: <strong>${formatRating(movie.ratingHim)}</strong></span>`);
+    parts.push(`<span class="detail-rating-item">${icon('user', 16)} Dele: <strong>${formatRating(movie.ratingHim)}</strong></span>`);
   }
   if (movie.ratingHer !== null && movie.ratingHer !== undefined) {
-    parts.push(`<span class="detail-rating-item">👩 Dela: <strong>${formatRating(movie.ratingHer)}</strong></span>`);
+    parts.push(`<span class="detail-rating-item">${icon('heart', 16)} Dela: <strong>${formatRating(movie.ratingHer)}</strong></span>`);
   }
   if (parts.length === 0) {
     return '<div class="detail-no-rating">Sem nota ainda</div>';
@@ -874,7 +940,7 @@ function buildRatingHtml(movie) {
 function renderDetailBasic(movie) {
   return `
     <div class="detail-header">
-      ${movie.poster ? `<img class="detail-poster" src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}">` : '<div class="detail-poster-empty">🎬</div>'}
+      ${movie.poster ? `<img class="detail-poster" src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}">` : '<div class="detail-poster-empty"><i data-lucide="clapperboard"></i></div>'}
       <div class="detail-info">
         <h2>${escapeHtml(movie.title)}</h2>
         <div class="detail-meta">
@@ -895,7 +961,7 @@ function renderDetailBasic(movie) {
 function renderDetailFull(movie, details) {
   const castHtml = (details.cast || []).map(c => `
     <div class="detail-cast-item">
-      ${c.photo ? `<img src="${escapeHtml(c.photo)}" alt="${escapeHtml(c.name)}">` : '<div class="cast-no-photo">👤</div>'}
+      ${c.photo ? `<img src="${escapeHtml(c.photo)}" alt="${escapeHtml(c.name)}">` : '<div class="cast-no-photo"><i data-lucide="user"></i></div>'}
       <div class="cast-text">
         <span class="cast-name">${escapeHtml(c.name)}</span>
         <span class="cast-character">${escapeHtml(c.character)}</span>
@@ -909,7 +975,7 @@ function renderDetailFull(movie, details) {
 
   return `
     <div class="detail-header" ${headerStyle}>
-      ${details.poster || movie.poster ? `<img class="detail-poster" src="${escapeHtml(details.poster || movie.poster)}" alt="${escapeHtml(movie.title)}">` : '<div class="detail-poster-empty">🎬</div>'}
+      ${details.poster || movie.poster ? `<img class="detail-poster" src="${escapeHtml(details.poster || movie.poster)}" alt="${escapeHtml(movie.title)}">` : '<div class="detail-poster-empty"><i data-lucide="clapperboard"></i></div>'}
       <div class="detail-info">
         <h2>${escapeHtml(details.title || movie.title)}</h2>
         ${details.originalTitle && details.originalTitle !== details.title ? `<div class="detail-original-title">${escapeHtml(details.originalTitle)}</div>` : ''}
@@ -1033,4 +1099,5 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ========== Init ==========
+refreshIcons();
 tryAutoLogin();

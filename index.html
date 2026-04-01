@@ -1,406 +1,648 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR" dir="ltr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Primary Meta Tags -->
-  <title>CineNotes - Avaliem Filmes Juntos | Rate Movies Together as a Couple</title>
-  <meta name="title" content="CineNotes - Avaliem Filmes Juntos | Rate Movies Together as a Couple">
-  <meta name="description" content="CineNotes: o app para casais avaliarem filmes juntos. Criem um ranking de filmes em casal com notas individuais ou conjuntas. Gratuito e sem cadastro. | The app for couples to rate movies together.">
-  <meta name="keywords" content="avaliacao de filmes em casal, notas de filmes, ranking de filmes para casais, avaliar filmes juntos, couple movie rating, rate movies together, movie tracker for couples, movie ranking app, filmes para casais, cinenotes">
-  <meta name="author" content="CineNotes">
-  <meta name="robots" content="index, follow">
-  <meta name="language" content="pt-BR">
+    <!-- Primary Meta Tags -->
+    <title>
+      CineNotes - Avaliem Filmes Juntos | Rate Movies Together as a Couple
+    </title>
+    <meta
+      name="title"
+      content="CineNotes - Avaliem Filmes Juntos | Rate Movies Together as a Couple"
+    />
+    <meta
+      name="description"
+      content="CineNotes: o app para casais avaliarem filmes juntos. Criem um ranking de filmes em casal com notas individuais ou conjuntas. Gratuito e sem cadastro. | The app for couples to rate movies together."
+    />
+    <meta
+      name="keywords"
+      content="avaliacao de filmes em casal, notas de filmes, ranking de filmes para casais, avaliar filmes juntos, couple movie rating, rate movies together, movie tracker for couples, movie ranking app, filmes para casais, cinenotes"
+    />
+    <meta name="author" content="CineNotes" />
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="pt-BR" />
 
-  <!-- Canonical URL (update with your actual domain) -->
-  <link rel="canonical" href="https://cinenotes.vercel.app/">
+    <!-- Canonical URL (update with your actual domain) -->
+    <link rel="canonical" href="https://cinenotes.vercel.app/" />
 
-  <!-- Alternate language -->
-  <link rel="alternate" hreflang="pt-BR" href="https://cinenotes.vercel.app/">
-  <link rel="alternate" hreflang="en" href="https://cinenotes.vercel.app/">
-  <link rel="alternate" hreflang="x-default" href="https://cinenotes.vercel.app/">
+    <!-- Alternate language -->
+    <link
+      rel="alternate"
+      hreflang="pt-BR"
+      href="https://cinenotes.vercel.app/"
+    />
+    <link rel="alternate" hreflang="en" href="https://cinenotes.vercel.app/" />
+    <link
+      rel="alternate"
+      hreflang="x-default"
+      href="https://cinenotes.vercel.app/"
+    />
 
-  <!-- Theme Color -->
-  <meta name="theme-color" content="#0f0f13">
-  <meta name="msapplication-navbutton-color" content="#0f0f13">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="CineNotes">
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#0f0f13" />
+    <meta name="msapplication-navbutton-color" content="#0f0f13" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="CineNotes" />
 
-  <!-- Favicon & Icons (replace with actual icon files) -->
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="shortcut icon" href="/favicon.ico">
+    <!-- Favicon & Icons (replace with actual icon files) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
 
-  <!-- Open Graph / Facebook -->
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://cinenotes.vercel.app/">
-  <meta property="og:title" content="CineNotes - Avaliem Filmes Juntos">
-  <meta property="og:description" content="O app para casais avaliarem filmes juntos. Criem um ranking de filmes em casal com notas individuais ou conjuntas, busquem cartazes automaticamente e acompanhem seus filmes favoritos.">
-  <meta property="og:image" content="https://cinenotes.vercel.app/og-image.png">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="CineNotes - Avaliem filmes juntos como casal">
-  <meta property="og:locale" content="pt_BR">
-  <meta property="og:locale:alternate" content="en_US">
-  <meta property="og:site_name" content="CineNotes">
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://cinenotes.vercel.app/" />
+    <meta property="og:title" content="CineNotes - Avaliem Filmes Juntos" />
+    <meta
+      property="og:description"
+      content="O app para casais avaliarem filmes juntos. Criem um ranking de filmes em casal com notas individuais ou conjuntas, busquem cartazes automaticamente e acompanhem seus filmes favoritos."
+    />
+    <meta
+      property="og:image"
+      content="https://cinenotes.vercel.app/og-image.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="CineNotes - Avaliem filmes juntos como casal"
+    />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:site_name" content="CineNotes" />
 
-  <!-- Twitter Card -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="https://cinenotes.vercel.app/">
-  <meta name="twitter:title" content="CineNotes - Rate Movies Together as a Couple">
-  <meta name="twitter:description" content="The app for couples to rate movies together. Create your shared movie ranking with joint or individual ratings. Free, no sign-up required.">
-  <meta name="twitter:image" content="https://cinenotes.vercel.app/og-image.png">
-  <meta name="twitter:image:alt" content="CineNotes - Rate movies together as a couple">
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://cinenotes.vercel.app/" />
+    <meta
+      name="twitter:title"
+      content="CineNotes - Rate Movies Together as a Couple"
+    />
+    <meta
+      name="twitter:description"
+      content="The app for couples to rate movies together. Create your shared movie ranking with joint or individual ratings. Free, no sign-up required."
+    />
+    <meta
+      name="twitter:image"
+      content="https://cinenotes.vercel.app/og-image.png"
+    />
+    <meta
+      name="twitter:image:alt"
+      content="CineNotes - Rate movies together as a couple"
+    />
 
-  <!-- Structured Data (JSON-LD) -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "CineNotes",
-    "alternateName": "CineNotes - Avaliem Filmes Juntos",
-    "url": "https://cinenotes.vercel.app/",
-    "description": "Web app para casais avaliarem filmes juntos. Crie rankings de filmes em casal com notas individuais ou conjuntas. | A web app for couples to rate movies together.",
-    "applicationCategory": "EntertainmentApplication",
-    "operatingSystem": "Any",
-    "browserRequirements": "Requires a modern web browser",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "BRL"
-    },
-    "featureList": [
-      "Joint couple movie ratings",
-      "Individual his & her ratings",
-      "Movie ranking by couple, his, and her scores",
-      "TMDB movie search with automatic poster loading",
-      "Password-protected private rooms",
-      "Responsive dark-themed interface"
-    ],
-    "inLanguage": ["pt-BR", "en"],
-    "author": {
-      "@type": "Organization",
-      "name": "CineNotes"
-    }
-  }
-  </script>
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "CineNotes",
+        "alternateName": "CineNotes - Avaliem Filmes Juntos",
+        "url": "https://cinenotes.vercel.app/",
+        "description": "Web app para casais avaliarem filmes juntos. Crie rankings de filmes em casal com notas individuais ou conjuntas. | A web app for couples to rate movies together.",
+        "applicationCategory": "EntertainmentApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires a modern web browser",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "BRL"
+        },
+        "featureList": [
+          "Joint couple movie ratings",
+          "Individual his & her ratings",
+          "Movie ranking by couple, his, and her scores",
+          "TMDB movie search with automatic poster loading",
+          "Password-protected private rooms",
+          "Responsive dark-themed interface"
+        ],
+        "inLanguage": ["pt-BR", "en"],
+        "author": {
+          "@type": "Organization",
+          "name": "CineNotes"
+        }
+      }
+    </script>
 
-  <!-- Stylesheets -->
-  <link rel="stylesheet" href="style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-</head>
-<body>
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-screen">
+      <div class="login-card">
+        <img src="assets/logo.png" alt="CineNotes" class="login-logo" />
+        <p class="login-subtitle">Avaliem filmes juntos</p>
 
-  <!-- Login Screen -->
-  <div id="login-screen" class="login-screen">
-    <div class="login-card">
-      <div class="login-logo">🎬</div>
-      <h1>CineNotes</h1>
-      <p class="login-subtitle">Avaliem filmes juntos</p>
-
-      <div class="login-tabs">
-        <button class="login-tab active" data-ltab="enter">Entrar</button>
-        <button class="login-tab" data-ltab="create">Criar Sala</button>
-      </div>
-
-      <form id="form-enter" class="login-form">
-        <div class="form-group">
-          <label for="enter-code">Código da Sala</label>
-          <input type="text" id="enter-code" placeholder="ex: joao-maria" required>
+        <div class="login-tabs">
+          <button class="login-tab active" data-ltab="enter">Entrar</button>
+          <button class="login-tab" data-ltab="create">Criar Sala</button>
         </div>
-        <div class="form-group">
-          <label for="enter-pass">Senha</label>
-          <input type="password" id="enter-pass" required>
-        </div>
-        <button type="submit" class="btn-primary btn-full">Entrar</button>
-      </form>
 
-      <form id="form-create" class="login-form" style="display:none;">
-        <div class="form-group">
-          <label for="create-code">Escolha um código</label>
-          <input type="text" id="create-code" placeholder="ex: joao-maria" minlength="3" maxlength="30" required>
-          <span class="form-hint">Mínimo 3 caracteres, sem espaços</span>
-        </div>
-        <div class="form-group">
-          <label for="create-pass">Defina uma senha</label>
-          <input type="password" id="create-pass" minlength="4" required>
-          <span class="form-hint">Mínimo 4 caracteres</span>
-        </div>
-        <button type="submit" class="btn-primary btn-full">Criar Sala</button>
-      </form>
+        <form id="form-enter" class="login-form">
+          <div class="form-group">
+            <label for="enter-code">Código da Sala</label>
+            <input
+              type="text"
+              id="enter-code"
+              placeholder="ex: joao-maria"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="enter-pass">Senha</label>
+            <input type="password" id="enter-pass" required />
+          </div>
+          <button type="submit" class="btn-primary btn-full">Entrar</button>
+        </form>
 
-      <div id="login-error" class="login-error" style="display:none;"></div>
-      <div id="login-success" class="login-success" style="display:none;"></div>
-    </div>
-  </div>
+        <form id="form-create" class="login-form" style="display: none">
+          <div class="form-group">
+            <label for="create-code">Escolha um código</label>
+            <input
+              type="text"
+              id="create-code"
+              placeholder="ex: joao-maria"
+              minlength="3"
+              maxlength="30"
+              required
+            />
+            <span class="form-hint">Mínimo 3 caracteres, sem espaços</span>
+          </div>
+          <div class="form-group">
+            <label for="create-pass">Defina uma senha</label>
+            <input type="password" id="create-pass" minlength="4" required />
+            <span class="form-hint">Mínimo 4 caracteres</span>
+          </div>
+          <button type="submit" class="btn-primary btn-full">Criar Sala</button>
+        </form>
 
-  <!-- App (hidden until login) -->
-  <div id="app" style="display:none;">
-    <header>
-      <div class="header-content">
-        <h1>🎬 CineNotes</h1>
-        <p class="subtitle">Sala: <strong id="room-name"></strong></p>
+        <div id="login-error" class="login-error" style="display: none"></div>
+        <div
+          id="login-success"
+          class="login-success"
+          style="display: none"
+        ></div>
       </div>
-      <div class="header-actions">
-        <button id="btn-add" class="btn-primary">+ Adicionar Filmes</button>
-        <button id="btn-watchlist-add" class="btn-secondary" onclick="openAddModal('watchlist')">+ Minha Lista</button>
-        <button id="btn-logout" class="btn-icon" title="Sair">🚪</button>
-      </div>
-    </header>
-
-    <nav class="tabs">
-      <button class="tab active" data-tab="ranking">🏆 Ranking Geral</button>
-      <button class="tab" data-tab="ele">👨 Ranking Dele</button>
-      <button class="tab" data-tab="ela">👩 Ranking Dela</button>
-      <button class="tab" data-tab="todos">🎞️ Todos os Filmes</button>
-    </nav>
-
-    <div class="stats-bar" id="stats-bar"></div>
-
-    <div id="saving-indicator" class="saving-indicator" style="display:none;">Salvando...</div>
-
-    <!-- Minha Lista (Watchlist) Section -->
-    <section class="slider-section" id="watchlist-section">
-      <div class="slider-header">
-        <h2>📋 Minha Lista</h2>
-        <span class="slider-count" id="watchlist-count"></span>
-      </div>
-      <div id="watchlist-content">
-        <div class="slider-container">
-          <button class="slider-arrow slider-arrow-left" onclick="scrollSlider('watchlist-track', -1)">‹</button>
-          <div class="slider-track" id="watchlist-track"></div>
-          <button class="slider-arrow slider-arrow-right" onclick="scrollSlider('watchlist-track', 1)">›</button>
-        </div>
-      </div>
-      <div id="watchlist-empty" class="section-empty-state" style="display:none;">
-        <p>Vocês ainda não adicionaram nada à lista do que querem ver</p>
-        <button class="btn-secondary" onclick="openAddModal('watchlist')">+ Adicionar à Lista</button>
-      </div>
-    </section>
-
-    <!-- Recomendações Section -->
-    <section class="slider-section" id="recommendations-section" style="display:none;">
-      <div class="slider-header">
-        <h2>✨ Recomendações</h2>
-        <span class="slider-count" id="recommendations-type"></span>
-      </div>
-      <div id="recommendations-hint" class="section-hint" style="display:none;"></div>
-      <div class="slider-container">
-        <button class="slider-arrow slider-arrow-left" onclick="scrollSlider('recommendations-track', -1)">‹</button>
-        <div class="slider-track" id="recommendations-track"></div>
-        <button class="slider-arrow slider-arrow-right" onclick="scrollSlider('recommendations-track', 1)">›</button>
-      </div>
-    </section>
-
-    <!-- Ranking Slider -->
-    <section class="slider-section" id="ranking-section">
-      <div class="slider-header">
-        <h2 id="ranking-title">🏆 Ranking</h2>
-        <span class="slider-count" id="ranking-count"></span>
-      </div>
-      <div class="slider-container" id="ranking-slider">
-        <button class="slider-arrow slider-arrow-left" onclick="scrollSlider('movie-grid', -1)">‹</button>
-        <main class="slider-track" id="movie-grid"></main>
-        <button class="slider-arrow slider-arrow-right" onclick="scrollSlider('movie-grid', 1)">›</button>
-      </div>
-    </section>
-
-    <div class="empty-state" id="empty-state" style="display:none;">
-      <div class="empty-icon">🎬</div>
-      <h2>Nenhum filme ainda!</h2>
-      <p>Comece adicionando os filmes que vocês assistiram juntos.</p>
-      <button class="btn-primary" onclick="openAddModal()">+ Adicionar Primeiro Filme</button>
     </div>
 
-    <!-- Modal Adicionar Filmes (Multi-Select) -->
-    <div class="modal-overlay" id="modal-add" style="display:none;">
-      <div class="modal">
-        <div class="modal-header">
-          <h2>Adicionar Filmes</h2>
-          <button class="btn-close" onclick="closeModal('modal-add')">&times;</button>
+    <!-- App (hidden until login) -->
+    <div id="app" style="display: none">
+      <header>
+        <div class="header-content">
+          <h1><img src="assets/logo.png" alt="CineNotes" class="header-logo"> CineNotes</h1>
+          <p class="subtitle">Sala: <strong id="room-name"></strong></p>
         </div>
-        <div class="modal-body">
-          <div class="search-section" id="search-section">
-            <label>Buscar filme (TMDB)</label>
-            <div class="search-box">
-              <input type="text" id="search-input" placeholder="Digite o nome do filme..." autocomplete="off">
-              <button type="button" id="btn-search" class="btn-secondary">Buscar</button>
-            </div>
-            <div id="search-results" class="search-results"></div>
-          </div>
+        <div class="header-actions">
+          <button id="btn-add" class="btn-primary">+ Adicionar Filmes</button>
+          <button id="btn-logout" class="btn-icon" title="Sair"><i data-lucide="log-out"></i></button>
+        </div>
+      </header>
 
-          <div class="divider" id="search-divider"><span>ou adicione manualmente</span></div>
+      <nav class="tabs">
+        <button class="tab active" data-tab="ranking"><i data-lucide="trophy"></i> Ranking Geral</button>
+        <button class="tab" data-tab="ele"><i data-lucide="user"></i> Ranking Dele</button>
+        <button class="tab" data-tab="ela"><i data-lucide="heart"></i> Ranking Dela</button>
+        <button class="tab" data-tab="todos"><i data-lucide="film"></i> Todos os Filmes</button>
+      </nav>
 
-          <div class="manual-add-row">
-            <div class="form-group flex-1">
-              <input type="text" id="manual-title" placeholder="Título do filme">
-            </div>
-            <div class="form-group" style="width:80px;">
-              <input type="number" id="manual-year" placeholder="Ano" min="1900" max="2030">
-            </div>
-            <button type="button" class="btn-secondary btn-manual-add" onclick="addManualToSelected()">+</button>
-          </div>
+      <div class="stats-bar" id="stats-bar"></div>
 
-          <div id="selected-section" class="selected-section" style="display:none;">
-            <h3 class="section-title">Filmes selecionados (<span id="selected-count">0</span>)</h3>
-            <div id="selected-list" class="selected-list"></div>
-            <button type="button" class="btn-primary btn-full" id="btn-submit-selected" onclick="submitSelectedMovies()">
-              Adicionar Filmes
+      <div id="saving-indicator" class="saving-indicator" style="display: none">
+        Salvando...
+      </div>
+
+      <!-- Minha Lista (Watchlist) Section -->
+      <section class="slider-section" id="watchlist-section">
+        <div class="slider-header">
+          <h2><i data-lucide="bookmark"></i> Minha Lista</h2>
+          <span class="slider-count" id="watchlist-count"></span>
+        </div>
+        <div id="watchlist-content">
+          <div class="slider-container">
+            <button
+              class="slider-arrow slider-arrow-left"
+              onclick="scrollSlider('watchlist-track', -1)"
+            >
+              ‹
+            </button>
+            <div class="slider-track" id="watchlist-track"></div>
+            <button
+              class="slider-arrow slider-arrow-right"
+              onclick="scrollSlider('watchlist-track', 1)"
+            >
+              ›
             </button>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- Modal Editar Filme -->
-    <div class="modal-overlay" id="modal-edit" style="display:none;">
-      <div class="modal">
-        <div class="modal-header">
-          <h2>Editar Filme</h2>
-          <button class="btn-close" onclick="closeModal('modal-edit')">&times;</button>
+        <div
+          id="watchlist-empty"
+          class="section-empty-state"
+          style="display: none"
+        >
+          <p>Vocês ainda não adicionaram nada à lista do que querem ver</p>
+          <button class="btn-secondary" onclick="openAddModal('watchlist')">
+            + Adicionar à Lista
+          </button>
         </div>
-        <div class="modal-body">
-          <form id="form-edit" class="form-movie">
-            <input type="hidden" id="edit-id">
-            <div class="form-row">
+      </section>
+
+      <!-- Recomendações Section -->
+      <section
+        class="slider-section"
+        id="recommendations-section"
+        style="display: none"
+      >
+        <div class="slider-header">
+          <h2><i data-lucide="sparkles"></i> Recomendações</h2>
+          <span class="slider-count" id="recommendations-type"></span>
+        </div>
+        <div
+          id="recommendations-hint"
+          class="section-hint"
+          style="display: none"
+        ></div>
+        <div class="slider-container">
+          <button
+            class="slider-arrow slider-arrow-left"
+            onclick="scrollSlider('recommendations-track', -1)"
+          >
+            ‹
+          </button>
+          <div class="slider-track" id="recommendations-track"></div>
+          <button
+            class="slider-arrow slider-arrow-right"
+            onclick="scrollSlider('recommendations-track', 1)"
+          >
+            ›
+          </button>
+        </div>
+      </section>
+
+      <!-- Ranking Slider -->
+      <section class="slider-section" id="ranking-section">
+        <div class="slider-header">
+          <h2 id="ranking-title"><i data-lucide="trophy"></i> Ranking</h2>
+          <span class="slider-count" id="ranking-count"></span>
+        </div>
+        <div class="slider-container" id="ranking-slider">
+          <button
+            class="slider-arrow slider-arrow-left"
+            onclick="scrollSlider('movie-grid', -1)"
+          >
+            ‹
+          </button>
+          <main class="slider-track" id="movie-grid"></main>
+          <button
+            class="slider-arrow slider-arrow-right"
+            onclick="scrollSlider('movie-grid', 1)"
+          >
+            ›
+          </button>
+        </div>
+      </section>
+
+      <div class="empty-state" id="empty-state" style="display: none">
+        <img src="assets/logo.png" alt="CineNotes" class="empty-icon">
+        <h2>Nenhum filme ainda!</h2>
+        <p>Comece adicionando os filmes que vocês assistiram juntos.</p>
+        <button class="btn-primary" onclick="openAddModal()">
+          + Adicionar Primeiro Filme
+        </button>
+      </div>
+
+      <!-- Modal Adicionar Filmes (Multi-Select) -->
+      <div class="modal-overlay" id="modal-add" style="display: none">
+        <div class="modal">
+          <div class="modal-header">
+            <h2>Adicionar Filmes</h2>
+            <button class="btn-close" onclick="closeModal('modal-add')">
+              &times;
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="search-section" id="search-section">
+              <label>Buscar filme (TMDB)</label>
+              <div class="search-box">
+                <input
+                  type="text"
+                  id="search-input"
+                  placeholder="Digite o nome do filme..."
+                  autocomplete="off"
+                />
+                <button type="button" id="btn-search" class="btn-secondary">
+                  Buscar
+                </button>
+              </div>
+              <div id="search-results" class="search-results"></div>
+            </div>
+
+            <div class="divider" id="search-divider">
+              <span>ou adicione manualmente</span>
+            </div>
+
+            <div class="manual-add-row">
               <div class="form-group flex-1">
-                <label for="edit-title">Título *</label>
-                <input type="text" id="edit-title" required>
+                <input
+                  type="text"
+                  id="manual-title"
+                  placeholder="Título do filme"
+                />
               </div>
-              <div class="form-group" style="width:100px;">
-                <label for="edit-year">Ano</label>
-                <input type="number" id="edit-year" min="1900" max="2030">
+              <div class="form-group" style="width: 80px">
+                <input
+                  type="number"
+                  id="manual-year"
+                  placeholder="Ano"
+                  min="1900"
+                  max="2030"
+                />
               </div>
+              <button
+                type="button"
+                class="btn-secondary btn-manual-add"
+                onclick="addManualToSelected()"
+              >
+                +
+              </button>
             </div>
-            <div class="form-group">
-              <label for="edit-poster">URL do Cartaz</label>
-              <input type="text" id="edit-poster">
+
+            <div
+              id="selected-section"
+              class="selected-section"
+              style="display: none"
+            >
+              <h3 class="section-title">
+                Filmes selecionados (<span id="selected-count">0</span>)
+              </h3>
+              <div id="selected-list" class="selected-list"></div>
+              <button
+                type="button"
+                class="btn-primary btn-full"
+                id="btn-submit-selected"
+                onclick="submitSelectedMovies()"
+              >
+                Adicionar Filmes
+              </button>
             </div>
-            <div class="form-group">
-              <label for="edit-genre">Gênero</label>
-              <input type="text" id="edit-genre">
-            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Editar Filme -->
+      <div class="modal-overlay" id="modal-edit" style="display: none">
+        <div class="modal">
+          <div class="modal-header">
+            <h2>Editar Filme</h2>
+            <button class="btn-close" onclick="closeModal('modal-edit')">
+              &times;
+            </button>
+          </div>
+          <div class="modal-body">
+            <form id="form-edit" class="form-movie">
+              <input type="hidden" id="edit-id" />
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="edit-title">Título *</label>
+                  <input type="text" id="edit-title" required />
+                </div>
+                <div class="form-group" style="width: 100px">
+                  <label for="edit-year">Ano</label>
+                  <input type="number" id="edit-year" min="1900" max="2030" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="edit-poster">URL do Cartaz</label>
+                <input type="text" id="edit-poster" />
+              </div>
+              <div class="form-group">
+                <label for="edit-genre">Gênero</label>
+                <input type="text" id="edit-genre" />
+              </div>
+              <h3 class="section-title">Notas (0 a 10)</h3>
+              <div class="rating-section">
+                <div class="rating-option">
+                  <input
+                    type="radio"
+                    name="edit-rating-type"
+                    value="joint"
+                    id="edit-rating-joint"
+                    checked
+                  />
+                  <label for="edit-rating-joint">Nota Conjunta</label>
+                </div>
+                <div class="rating-option">
+                  <input
+                    type="radio"
+                    name="edit-rating-type"
+                    value="individual"
+                    id="edit-rating-individual"
+                  />
+                  <label for="edit-rating-individual">Notas Individuais</label>
+                </div>
+              </div>
+              <div id="edit-joint-rating" class="rating-inputs">
+                <div class="form-group">
+                  <label>Nota do Casal</label>
+                  <div class="rating-slider-group">
+                    <input
+                      type="range"
+                      id="edit-rate-joint"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value="7"
+                    />
+                    <span class="rating-value" id="edit-rate-joint-val"
+                      >7.0</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <div
+                id="edit-individual-rating"
+                class="rating-inputs"
+                style="display: none"
+              >
+                <div class="form-row">
+                  <div class="form-group flex-1">
+                    <label>Nota Dele</label>
+                    <div class="rating-slider-group">
+                      <input
+                        type="range"
+                        id="edit-rate-him"
+                        min="0"
+                        max="10"
+                        step="0.5"
+                        value="7"
+                      />
+                      <span class="rating-value" id="edit-rate-him-val"
+                        >7.0</span
+                      >
+                    </div>
+                  </div>
+                  <div class="form-group flex-1">
+                    <label>Nota Dela</label>
+                    <div class="rating-slider-group">
+                      <input
+                        type="range"
+                        id="edit-rate-her"
+                        min="0"
+                        max="10"
+                        step="0.5"
+                        value="7"
+                      />
+                      <span class="rating-value" id="edit-rate-her-val"
+                        >7.0</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn-primary flex-1">
+                  Salvar Alterações
+                </button>
+                <button type="button" class="btn-danger" id="btn-delete">
+                  Excluir
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Detalhes do Filme -->
+      <div class="modal-overlay" id="modal-detail" style="display: none">
+        <div class="modal modal-lg">
+          <div class="modal-header">
+            <h2>Detalhes do Filme</h2>
+            <button class="btn-close" onclick="closeModal('modal-detail')">
+              &times;
+            </button>
+          </div>
+          <div class="modal-body" id="detail-content">
+            <!-- Dynamic content rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Marcar como Assistido -->
+      <div class="modal-overlay" id="modal-mark-watched" style="display: none">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h2>Marcar como Assistido</h2>
+            <button
+              class="btn-close"
+              onclick="closeModal('modal-mark-watched')"
+            >
+              &times;
+            </button>
+          </div>
+          <div class="modal-body">
+            <p
+              id="mark-watched-title"
+              style="font-weight: 600; font-size: 1.1rem; margin-bottom: 16px"
+            ></p>
+            <input type="hidden" id="mark-watched-id" />
             <h3 class="section-title">Notas (0 a 10)</h3>
             <div class="rating-section">
               <div class="rating-option">
-                <input type="radio" name="edit-rating-type" value="joint" id="edit-rating-joint" checked>
-                <label for="edit-rating-joint">Nota Conjunta</label>
+                <input
+                  type="radio"
+                  name="mark-rating-type"
+                  value="joint"
+                  id="mark-rating-joint"
+                  checked
+                />
+                <label for="mark-rating-joint">Nota Conjunta</label>
               </div>
               <div class="rating-option">
-                <input type="radio" name="edit-rating-type" value="individual" id="edit-rating-individual">
-                <label for="edit-rating-individual">Notas Individuais</label>
+                <input
+                  type="radio"
+                  name="mark-rating-type"
+                  value="individual"
+                  id="mark-rating-individual"
+                />
+                <label for="mark-rating-individual">Notas Individuais</label>
               </div>
             </div>
-            <div id="edit-joint-rating" class="rating-inputs">
+            <div id="mark-joint-rating" class="rating-inputs">
               <div class="form-group">
                 <label>Nota do Casal</label>
                 <div class="rating-slider-group">
-                  <input type="range" id="edit-rate-joint" min="0" max="10" step="0.5" value="7">
-                  <span class="rating-value" id="edit-rate-joint-val">7.0</span>
+                  <input
+                    type="range"
+                    id="mark-rate-joint"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    value="7"
+                  />
+                  <span class="rating-value" id="mark-rate-joint-val">7.0</span>
                 </div>
               </div>
             </div>
-            <div id="edit-individual-rating" class="rating-inputs" style="display:none;">
+            <div
+              id="mark-individual-rating"
+              class="rating-inputs"
+              style="display: none"
+            >
               <div class="form-row">
                 <div class="form-group flex-1">
-                  <label>Nota Dele 👨</label>
+                  <label>Nota Dele</label>
                   <div class="rating-slider-group">
-                    <input type="range" id="edit-rate-him" min="0" max="10" step="0.5" value="7">
-                    <span class="rating-value" id="edit-rate-him-val">7.0</span>
+                    <input
+                      type="range"
+                      id="mark-rate-him"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value="7"
+                    />
+                    <span class="rating-value" id="mark-rate-him-val">7.0</span>
                   </div>
                 </div>
                 <div class="form-group flex-1">
-                  <label>Nota Dela 👩</label>
+                  <label>Nota Dela</label>
                   <div class="rating-slider-group">
-                    <input type="range" id="edit-rate-her" min="0" max="10" step="0.5" value="7">
-                    <span class="rating-value" id="edit-rate-her-val">7.0</span>
+                    <input
+                      type="range"
+                      id="mark-rate-her"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value="7"
+                    />
+                    <span class="rating-value" id="mark-rate-her-val">7.0</span>
                   </div>
                 </div>
               </div>
             </div>
-            <div class="form-actions">
-              <button type="submit" class="btn-primary flex-1">Salvar Alterações</button>
-              <button type="button" class="btn-danger" id="btn-delete">Excluir</button>
+            <div class="form-actions" style="margin-top: 16px">
+              <button class="btn-primary flex-1" onclick="submitMarkWatched()">
+                Salvar e Mover para Ranking
+              </button>
             </div>
-          </form>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Modal Detalhes do Filme -->
-    <div class="modal-overlay" id="modal-detail" style="display:none;">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <h2>Detalhes do Filme</h2>
-          <button class="btn-close" onclick="closeModal('modal-detail')">&times;</button>
-        </div>
-        <div class="modal-body" id="detail-content">
-          <!-- Dynamic content rendered by JS -->
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal Marcar como Assistido -->
-    <div class="modal-overlay" id="modal-mark-watched" style="display:none;">
-      <div class="modal modal-sm">
-        <div class="modal-header">
-          <h2>Marcar como Assistido</h2>
-          <button class="btn-close" onclick="closeModal('modal-mark-watched')">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p id="mark-watched-title" style="font-weight:600; font-size:1.1rem; margin-bottom:16px;"></p>
-          <input type="hidden" id="mark-watched-id">
-          <h3 class="section-title">Notas (0 a 10)</h3>
-          <div class="rating-section">
-            <div class="rating-option">
-              <input type="radio" name="mark-rating-type" value="joint" id="mark-rating-joint" checked>
-              <label for="mark-rating-joint">Nota Conjunta</label>
-            </div>
-            <div class="rating-option">
-              <input type="radio" name="mark-rating-type" value="individual" id="mark-rating-individual">
-              <label for="mark-rating-individual">Notas Individuais</label>
-            </div>
-          </div>
-          <div id="mark-joint-rating" class="rating-inputs">
-            <div class="form-group">
-              <label>Nota do Casal</label>
-              <div class="rating-slider-group">
-                <input type="range" id="mark-rate-joint" min="0" max="10" step="0.5" value="7">
-                <span class="rating-value" id="mark-rate-joint-val">7.0</span>
-              </div>
-            </div>
-          </div>
-          <div id="mark-individual-rating" class="rating-inputs" style="display:none;">
-            <div class="form-row">
-              <div class="form-group flex-1">
-                <label>Nota Dele 👨</label>
-                <div class="rating-slider-group">
-                  <input type="range" id="mark-rate-him" min="0" max="10" step="0.5" value="7">
-                  <span class="rating-value" id="mark-rate-him-val">7.0</span>
-                </div>
-              </div>
-              <div class="form-group flex-1">
-                <label>Nota Dela 👩</label>
-                <div class="rating-slider-group">
-                  <input type="range" id="mark-rate-her" min="0" max="10" step="0.5" value="7">
-                  <span class="rating-value" id="mark-rate-her-val">7.0</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="form-actions" style="margin-top:16px;">
-            <button class="btn-primary flex-1" onclick="submitMarkWatched()">Salvar e Mover para Ranking</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script src="app.js"></script>
-</body>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="app.js"></script>
+  </body>
 </html>
