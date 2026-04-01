@@ -24,6 +24,7 @@
 - [Sobre (Portugues)](#sobre-portugues)
 - [Features](#features)
 - [How It Works](#how-it-works)
+- [Recommendation Engine](#recommendation-engine)
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
 - [Deployment (Vercel)](#deployment-vercel)
@@ -106,6 +107,142 @@ CineNotes/
 ```
 
 Data is stored per-room as JSON files in **Vercel Blob Storage** (`salas/<room-code>.json`). Passwords are hashed with SHA-256 + salt for security.
+
+---
+
+## Recommendation Engine
+
+The recommendation system now uses a multi-stage ranking pipeline instead of relying only on TMDB's `/recommendations` endpoint.
+
+### Strategy Overview
+
+1. **Collect user signals**  
+   The existing `seeds` request field now carries all rated movies plus watchlist items. Rated movies keep their real score. Watchlist items are treated as a strong positive intent signal with a synthetic rating of `7.5`.
+
+2. **Build a user profile**  
+   Every rating is normalized with:
+
+   ```text
+   weight = rating - user_mean_rating
+   ```
+
+   Positive weights represent preference. Negative weights represent avoidance. Watchlist items receive an additional positive boost so they influence both genre preference and candidate generation.
+
+3. **Fetch candidates from multiple TMDB sources**  
+   For the strongest positive seeds, the backend fetches:
+
+   - `/movie/{id}/recommendations`
+   - `/movie/{id}/similar`
+
+   It also fetches:
+
+   - `/discover/movie` using the user's strongest genres
+   - `/trending/movie/week` for exploration
+
+   Calls are executed in parallel and intentionally capped to one page per endpoint to keep latency under control.
+
+4. **Merge, score, explore, and rerank**  
+   Results are deduplicated by TMDB ID, scored with user-profile similarity plus TMDB metadata, then reranked to reserve exploration slots and avoid repetitive genre streaks.
+
+### Scoring Formula
+
+Each candidate receives a final ranking score based on:
+
+```text
+score =
+  w1 * weighted_similarity +
+  w2 * frequency +
+  w3 * tmdb_vote_average +
+  w4 * popularity +
+  w5 * recency
+```
+
+Where:
+
+- `weighted_similarity` comes from genre overlap with weighted user signals
+- `frequency` counts how often a movie appears across recommendation sources
+- `tmdb_vote_average` is normalized to 0-1
+- `popularity` is log-normalized to reduce blockbuster dominance
+- `recency` gives a modest boost to newer releases
+
+Genre similarity is computed with the Jaccard index:
+
+```text
+genre_similarity = intersection(genres) / union(genres)
+```
+
+Disliked genres keep the existing multiplicative penalty:
+
+```text
+score *= 0.7 ^ disliked_genre_matches
+```
+
+### Data Flow
+
+```text
+movies + watchlist
+        |
+        v
+buildRecommendationSignals() on the client
+        |
+        v
+/api/recommendations
+        |
+        v
+getUserData()
+        |
+        v
+buildUserProfile()
+        |
+        v
+fetchCandidates()
+        |
+        v
+mergeAndDeduplicate()
+        |
+        v
+computeScores()
+        |
+        v
+applyExploration()
+        |
+        v
+rerankWithDiversity()
+        |
+        v
+returnTopResults()
+```
+
+### Trade-offs vs Previous Approach
+
+Previous approach:
+
+- Used only highly rated seed movies
+- Relied almost entirely on TMDB `/recommendations`
+- Ranked by seed-rating sum plus raw frequency
+- Ignored watchlist intent
+
+Current approach:
+
+- Uses all ratings, not only favorites
+- Uses watchlist as a first-class signal
+- Combines recommendations, similar titles, discover, and trending
+- Penalizes negative taste signals instead of only boosting favorites
+- Explicitly balances personalization, diversity, and exploration
+
+Trade-offs:
+
+- The backend logic is more complex than the previous rule-based ranker
+- It makes more TMDB calls, but calls are bounded and parallelized
+- Genre-based similarity is still heuristic and less expressive than embeddings
+
+### Future Improvements
+
+- Synopsis or multimodal embeddings for richer similarity
+- Vector search over a local movie index instead of TMDB-only retrieval
+- Online learning from clicks, skips, and watchlist additions
+- Separate pair-level and individual taste models
+- Caching TMDB metadata to reduce repeated network calls
 
 ---
 
