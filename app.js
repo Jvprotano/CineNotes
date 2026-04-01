@@ -963,8 +963,6 @@ function openAddModal(target) {
   searchResults = [];
   document.getElementById("search-input").value = "";
   document.getElementById("search-results").innerHTML = "";
-  document.getElementById("manual-title").value = "";
-  document.getElementById("manual-year").value = "";
   renderSelectedMovies();
 
   // Update modal title based on target
@@ -989,7 +987,7 @@ document.querySelectorAll(".modal-overlay").forEach((modal) => {
   });
 });
 
-// ========== TMDB Search ==========
+// ========== Movie Search ==========
 document.getElementById("btn-search").addEventListener("click", searchTMDB);
 document.getElementById("search-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
@@ -1117,35 +1115,6 @@ function renderSelectedMovies() {
     .join("");
   refreshIcons();
 }
-
-function addManualToSelected() {
-  const titleInput = document.getElementById("manual-title");
-  const yearInput = document.getElementById("manual-year");
-  const title = titleInput.value.trim();
-  if (!title) return;
-
-  selectedMovies.push({
-    tmdbId: null,
-    title,
-    year: yearInput.value || "",
-    poster: "",
-    posterThumb: "",
-    genre: "",
-    overview: "",
-  });
-
-  titleInput.value = "";
-  yearInput.value = "";
-  renderSelectedMovies();
-}
-
-// Manual add on Enter
-document.getElementById("manual-title").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    addManualToSelected();
-  }
-});
 
 async function submitSelectedMovies() {
   if (selectedMovies.length === 0) return;
@@ -1364,7 +1333,7 @@ function renderDetailBasic(movie, opts) {
       </div>
     </div>
     ${movie.overview ? `<div class="detail-section"><h3>Sinopse</h3><p>${escapeHtml(movie.overview)}</p></div>` : ""}
-    ${movie.tmdbId ? '<div class="detail-loading">Carregando detalhes do TMDB...</div>' : ""}
+    ${movie.tmdbId ? '<div class="detail-loading">Carregando detalhes...</div>' : ""}
     ${renderDetailActions(movie, opts)}
   `;
 }
