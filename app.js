@@ -483,9 +483,35 @@ function getTopGenreIds() {
   const rated = movies.filter(m => getEffectiveRating(m) !== null && getEffectiveRating(m) >= 7);
   if (rated.length < MIN_RATED_MOVIES) return null;
 
-  // Count genre frequency among well-rated movies
-  const genreCount = {};
+  // Weight genres by rating magnitude (a 10-rated movie contributes more than a 7)
+  const genreWeight = {};
   rated.forEach(m => {
+    if (!m.genre) return;
+    const rating = getEffectiveRating(m);
+    const weight = rating / 7; // 10 -> 1.43, 7 -> 1.0
+    m.genre.split(',').map(g => g.trim()).forEach(g => {
+      const id = GENRE_NAME_TO_ID[g];
+      if (id) genreWeight[id] = (genreWeight[id] || 0) + weight;
+    });
+  });
+
+  // Return top 3 genres by weighted score
+  return Object.entries(genreWeight)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([id]) => parseInt(id));
+}
+
+function getExcludedGenreIds() {
+  // Find genres that appear frequently in low-rated movies (< 5)
+  const lowRated = movies.filter(m => {
+    const r = getEffectiveRating(m);
+    return r !== null && r < 5;
+  });
+  if (lowRated.length < 2) return [];
+
+  const genreCount = {};
+  lowRated.forEach(m => {
     if (!m.genre) return;
     m.genre.split(',').map(g => g.trim()).forEach(g => {
       const id = GENRE_NAME_TO_ID[g];
@@ -493,11 +519,20 @@ function getTopGenreIds() {
     });
   });
 
-  // Return top 3 genres
+  // Exclude genres that appear in 2+ low-rated movies and are NOT in top liked genres
+  const topGenres = new Set(getTopGenreIds() || []);
   return Object.entries(genreCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
+    .filter(([id, count]) => count >= 2 && !topGenres.has(parseInt(id)))
     .map(([id]) => parseInt(id));
+}
+
+function getTopRatedMovieIds() {
+  // Get TMDB IDs of the top-rated movies for seeding TMDB recommendations
+  return movies
+    .filter(m => m.tmdbId && getEffectiveRating(m) !== null && getEffectiveRating(m) >= 7)
+    .sort((a, b) => getEffectiveRating(b) - getEffectiveRating(a))
+    .slice(0, 5)
+    .map(m => m.tmdbId);
 }
 
 async function loadRecommendations() {
@@ -514,8 +549,13 @@ async function loadRecommendations() {
     ];
 
     const topGenres = getTopGenreIds();
+    const excludeGenreIds = getExcludedGenreIds();
+    const topMovieTmdbIds = getTopRatedMovieIds();
+
     const body = { excludeTmdbIds };
     if (topGenres) body.genreIds = topGenres;
+    if (excludeGenreIds.length > 0) body.excludeGenreIds = excludeGenreIds;
+    if (topMovieTmdbIds.length > 0) body.topMovieTmdbIds = topMovieTmdbIds;
 
     const data = await api('recommendations', body);
     recommendations = data.results || [];
@@ -540,12 +580,21 @@ function renderRecommendations() {
 
   section.style.display = 'block';
 
+  const ratedCount = movies.filter(m => getEffectiveRating(m) !== null).length;
+  const MIN_RATED = 5;
+
   if (recommendationType === 'personalized') {
-    typeEl.textContent = 'Baseado nos seus gostos';
+    const topRatedCount = movies.filter(m => getEffectiveRating(m) !== null && getEffectiveRating(m) >= 7).length;
+    typeEl.textContent = `Baseado nos seus ${topRatedCount} filmes favoritos`;
     hintEl.style.display = 'none';
   } else {
     typeEl.textContent = 'Em alta esta semana';
-    hintEl.textContent = 'Avaliem mais filmes para recomendações personalizadas';
+    if (ratedCount < MIN_RATED) {
+      const remaining = MIN_RATED - ratedCount;
+      hintEl.innerHTML = `${icon('info', 14)} Avaliem mais <strong>${remaining}</strong> filme${remaining > 1 ? 's' : ''} para desbloquear recomendações personalizadas`;
+    } else {
+      hintEl.textContent = 'Avaliem filmes com nota 7+ para recomendações personalizadas';
+    }
     hintEl.style.display = 'block';
   }
 
@@ -595,6 +644,8 @@ async function addRecommendationToWatchlist(tmdbId) {
     dateAdded: new Date().toISOString().slice(0, 10),
   });
 
+  // Remove from recommendations list so it disappears immediately
+  recommendations = recommendations.filter(r => r.tmdbId !== tmdbId);
   render();
   await saveToServer();
 }
@@ -876,6 +927,7 @@ async function submitMarkWatched() {
   closeModal('modal-mark-watched');
   render();
   await saveToServer();
+  loadRecommendations();
 }
 
 async function removeFromWatchlist(id) {
@@ -1079,6 +1131,7 @@ document.getElementById('form-edit').addEventListener('submit', async (e) => {
   closeModal('modal-edit');
   render();
   await saveToServer();
+  loadRecommendations();
 });
 
 // Delete

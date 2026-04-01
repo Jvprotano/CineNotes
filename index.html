@@ -268,7 +268,10 @@
       >
         <div class="slider-header">
           <h2><i data-lucide="sparkles"></i> Recomendações</h2>
-          <span class="slider-count" id="recommendations-type"></span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="slider-count" id="recommendations-type"></span>
+            <button class="btn-icon btn-refresh-recs" id="btn-refresh-recs" onclick="loadRecommendations()" title="Atualizar recomendações"><i data-lucide="refresh-cw"></i></button>
+          </div>
         </div>
         <div
           id="recommendations-hint"

@@ -28,31 +28,88 @@ module.exports = async (req, res) => {
       return res.status(500).json({ error: 'TMDB_API_KEY não configurada no servidor.' });
     }
 
-    const { genreIds, excludeTmdbIds } = req.body || {};
+    const { genreIds, excludeGenreIds, excludeTmdbIds, topMovieTmdbIds } = req.body || {};
     const exclude = new Set(excludeTmdbIds || []);
+    const seen = new Set();
 
-    // If user provided preferred genres, use discover endpoint filtered by those genres
+    function dedup(movie) {
+      if (exclude.has(movie.id) || seen.has(movie.id)) return false;
+      seen.add(movie.id);
+      return true;
+    }
+
+    // Strategy 1: TMDB movie-based recommendations from top-rated movies
+    if (topMovieTmdbIds && topMovieTmdbIds.length > 0) {
+      const allResults = [];
+
+      // Fetch recommendations for up to 5 top-rated movies in parallel
+      const seeds = topMovieTmdbIds.slice(0, 5);
+      const fetches = seeds.map(async (tmdbId) => {
+        const url = `https://api.themoviedb.org/3/movie/${encodeURIComponent(tmdbId)}/recommendations?api_key=${encodeURIComponent(apiKey)}&language=pt-BR&page=1`;
+        try {
+          const response = await fetch(url);
+          const data = await response.json();
+          return data.results || [];
+        } catch {
+          return [];
+        }
+      });
+
+      const resultSets = await Promise.all(fetches);
+      for (const results of resultSets) {
+        for (const m of results) {
+          if (dedup(m)) allResults.push(m);
+        }
+      }
+
+      // Filter out excluded genres if provided
+      let filtered = allResults;
+      if (excludeGenreIds && excludeGenreIds.length > 0) {
+        const excludeSet = new Set(excludeGenreIds);
+        filtered = allResults.filter(m => {
+          const movieGenres = m.genre_ids || [];
+          // Exclude if ALL genres are in the excluded set (don't be too aggressive)
+          return !movieGenres.every(g => excludeSet.has(g));
+        });
+      }
+
+      if (filtered.length >= 5) {
+        return res.status(200).json({
+          results: filtered.slice(0, 20).map(mapMovie),
+          type: 'personalized',
+        });
+      }
+      // If not enough results from movie-based recs, fall through to discover
+    }
+
+    // Strategy 2: Genre-based discover with weighted genres and exclusions
     if (genreIds && genreIds.length > 0) {
       const genreParam = genreIds.join(',');
-      const url = `https://api.themoviedb.org/3/discover/movie?api_key=${encodeURIComponent(apiKey)}&language=pt-BR&sort_by=vote_average.desc&vote_count.gte=200&with_genres=${genreParam}&page=1`;
+      let url = `https://api.themoviedb.org/3/discover/movie?api_key=${encodeURIComponent(apiKey)}&language=pt-BR&sort_by=vote_average.desc&vote_count.gte=200&with_genres=${genreParam}&page=1`;
+
+      // Exclude disliked genres
+      if (excludeGenreIds && excludeGenreIds.length > 0) {
+        url += `&without_genres=${excludeGenreIds.join(',')}`;
+      }
+
       const response = await fetch(url);
       const data = await response.json();
 
       const results = (data.results || [])
-        .filter(m => !exclude.has(m.id))
+        .filter(m => dedup(m))
         .slice(0, 20)
         .map(mapMovie);
 
       return res.status(200).json({ results, type: 'personalized' });
     }
 
-    // Fallback: trending movies of the week
+    // Strategy 3: Trending movies of the week
     const url = `https://api.themoviedb.org/3/trending/movie/week?api_key=${encodeURIComponent(apiKey)}&language=pt-BR`;
     const response = await fetch(url);
     const data = await response.json();
 
     const results = (data.results || [])
-      .filter(m => !exclude.has(m.id))
+      .filter(m => dedup(m))
       .slice(0, 20)
       .map(mapMovie);
 

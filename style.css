@@ -1279,6 +1279,17 @@ header h1 {
   border-left: 3px solid var(--gold);
 }
 
+.btn-refresh-recs {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 6px;
+}
+.btn-refresh-recs i {
+  width: 16px;
+  height: 16px;
+}
+
 /* ========== Recommendation Card extras ========== */
 .card-tmdb-score {
   font-size: 0.75rem;
