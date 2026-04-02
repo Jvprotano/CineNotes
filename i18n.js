@@ -76,6 +76,11 @@ const translations = {
     alreadyAdded: "Já adicionado",
     addToMyList: "Lista",
     watched: "Assistido",
+    notInterested: "NÃ£o tenho interesse",
+    dismissRecommendationTitle: "Remover esta recomendaÃ§Ã£o",
+
+    notInterested: "N\u00e3o tenho interesse",
+    dismissRecommendationTitle: "Remover esta recomenda\u00e7\u00e3o",
 
     // Add modal
     catalog: "Catálogo",
@@ -299,6 +304,8 @@ const translations = {
     alreadyAdded: "Already added",
     addToMyList: "List",
     watched: "Watched",
+    notInterested: "Not interested",
+    dismissRecommendationTitle: "Remove this recommendation",
 
     // Add modal
     catalog: "Catalog",

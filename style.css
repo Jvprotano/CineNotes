@@ -1012,6 +1012,11 @@ input:focus-visible {
   gap: 8px;
   width: 100%;
 }
+.rec-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
 .btn-watched,
 .btn-remove-wl {
   min-height: 38px;
@@ -1022,18 +1027,36 @@ input:focus-visible {
 }
 .btn-watched {
   flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
   border: 1px solid rgba(139, 92, 246, 0.18);
   background: rgba(139, 92, 246, 0.1);
   color: #c7b4ff;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
 }
 .btn-watched:hover:not(:disabled) {
   background: rgba(139, 92, 246, 0.16);
   border-color: rgba(139, 92, 246, 0.28);
 }
+.rec-actions .btn-watched:only-child,
+.btn-rec-dismiss {
+  grid-column: 1 / -1;
+}
 .btn-rec-watched {
   border-color: rgba(96, 118, 255, 0.2);
   background: rgba(96, 118, 255, 0.1);
   color: #b6c3ff;
+}
+.btn-rec-dismiss {
+  border-color: rgba(255, 107, 122, 0.24);
+  background: rgba(255, 107, 122, 0.1);
+  color: #ff98a6;
+}
+.btn-rec-dismiss:hover:not(:disabled) {
+  background: rgba(255, 107, 122, 0.18);
+  border-color: rgba(255, 107, 122, 0.42);
 }
 .btn-remove-wl {
   min-width: 40px;
@@ -1055,6 +1078,22 @@ input:focus-visible {
 }
 .recommendation-card {
   border-color: rgba(255, 200, 87, 0.14);
+}
+.recommendation-card .card-info {
+  gap: 10px;
+}
+.recommendation-card .card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+  min-height: 2.6em;
+}
+.recommendation-card .card-year {
+  min-height: 1rem;
+}
+.recommendation-card .card-tmdb-score {
+  min-height: 1rem;
 }
 .modal-overlay {
   position: fixed;
@@ -1640,9 +1679,14 @@ input:focus-visible {
   }
   .search-box,
   .watchlist-actions,
-  .rec-actions,
   .form-actions {
     flex-direction: column;
+  }
+  .rec-actions {
+    grid-template-columns: 1fr;
+  }
+  .btn-rec-dismiss {
+    grid-column: auto;
   }
   .slider-track .movie-card,
   .slider-track .watchlist-card {

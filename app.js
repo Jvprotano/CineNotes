@@ -1,6 +1,7 @@
 // ========== State ==========
 let movies = [];
 let watchlist = [];
+let dismissed = [];
 let recommendations = [];
 let recommendationType = "trending"; // 'personalized' or 'trending'
 let currentTab = "inicio";
@@ -42,7 +43,7 @@ function devApi(endpoint, body) {
       throw new Error(t("errPasswordLength"));
     if (devGetRoom(cleanCode))
       throw new Error(t("errCodeTaken"));
-    devSetRoom(cleanCode, { password, movies: [], watchlist: [], tmdbKey: "" });
+    devSetRoom(cleanCode, { password, movies: [], watchlist: [], dismissed: [], tmdbKey: "" });
     return { ok: true };
   }
   if (endpoint === "load") {
@@ -56,6 +57,7 @@ function devApi(endpoint, body) {
     return {
       movies: room.movies || [],
       watchlist: room.watchlist || [],
+      dismissed: room.dismissed || [],
       tmdbKey: room.tmdbKey || "",
     };
   }
@@ -70,6 +72,8 @@ function devApi(endpoint, body) {
     room.movies = body.movies || room.movies;
     room.watchlist =
       body.watchlist !== undefined ? body.watchlist : room.watchlist || [];
+    room.dismissed =
+      body.dismissed !== undefined ? body.dismissed : room.dismissed || [];
     if (body.tmdbKey !== undefined) room.tmdbKey = body.tmdbKey;
     devSetRoom(cleanCode, room);
     return { ok: true };
@@ -114,6 +118,7 @@ async function saveToServer() {
       password: session.password,
       movies,
       watchlist,
+      dismissed,
     });
   } catch (err) {
     console.error("Erro ao salvar:", err);
@@ -276,6 +281,7 @@ document.getElementById("form-enter").addEventListener("submit", async (e) => {
     sessionStorage.setItem("cinenotes_session", JSON.stringify(session));
     movies = data.movies || [];
     watchlist = data.watchlist || [];
+    dismissed = data.dismissed || [];
     enterApp();
   } catch (err) {
     showError(err.message);
@@ -299,6 +305,8 @@ document.getElementById("form-create").addEventListener("submit", async (e) => {
     sessionStorage.setItem("cinenotes_session", JSON.stringify(session));
     movies = [];
     watchlist = [];
+    dismissed = [];
+    recommendations = [];
     setTimeout(enterApp, 800);
   } catch (err) {
     showError(err.message);
@@ -326,6 +334,7 @@ async function tryAutoLogin() {
     });
     movies = data.movies || [];
     watchlist = data.watchlist || [];
+    dismissed = data.dismissed || [];
     enterApp();
   } catch {
     session = null;
@@ -732,10 +741,11 @@ async function loadRecommendations() {
   section.style.display = "block";
 
   try {
-    const excludeTmdbIds = [
+    const excludeTmdbIds = Array.from(new Set([
       ...movies.filter((m) => m.tmdbId).map((m) => m.tmdbId),
       ...watchlist.filter((w) => w.tmdbId).map((w) => w.tmdbId),
-    ];
+      ...dismissed,
+    ]));
 
     const seeds = buildRecommendationSignals();
     const dislikedGenreIds = getDislikedGenreIds();
@@ -935,6 +945,24 @@ async function addRecommendationToWatchlist(tmdbId) {
   recommendations = recommendations.filter((r) => r.tmdbId !== tmdbId);
   render();
   await saveToServer();
+}
+
+function clearDismissedTmdbId(tmdbId) {
+  if (!tmdbId) return;
+  dismissed = dismissed.filter((id) => id !== tmdbId);
+}
+
+async function dismissRecommendation(tmdbId) {
+  if (!tmdbId) return;
+
+  if (!dismissed.includes(tmdbId)) {
+    dismissed.push(tmdbId);
+  }
+
+  recommendations = recommendations.filter((r) => r.tmdbId !== tmdbId);
+  render();
+  await saveToServer();
+  loadRecommendations();
 }
 
 // ========== Tabs ==========
@@ -1213,6 +1241,8 @@ async function submitMarkWatched() {
     dateAdded: new Date().toISOString().slice(0, 10),
   });
 
+  clearDismissedTmdbId(item.tmdbId);
+
   closeModal("modal-mark-watched");
   render();
   await saveToServer();
@@ -1470,6 +1500,10 @@ document.getElementById("form-edit").addEventListener("submit", async (e) => {
       ? parseFloat(document.getElementById("edit-rate-her").value)
       : null,
   };
+
+  if (getEffectiveRating(movies[idx]) !== null) {
+    clearDismissedTmdbId(movies[idx].tmdbId);
+  }
 
   closeModal("modal-edit");
   render();
@@ -1845,9 +1879,10 @@ function renderRecommendations() {
           <div class="watchlist-actions rec-actions">
             ${
               alreadyInList
-                ? '<button class="btn-watched" disabled style="opacity:.55;">${t("alreadyAdded")}</button>'
+                ? `<button class="btn-watched" disabled style="opacity:.55;">${t("alreadyAdded")}</button>`
                 : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="${t("addToMyListModal")}">${icon("plus", 14)} ${t("addToMyList")}</button>
-                   <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="${t("markAsWatched")}">${icon("check", 14)} ${t("watched")}</button>`
+                   <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="${t("markAsWatched")}">${icon("check", 14)} ${t("watched")}</button>
+                   <button class="btn-watched btn-rec-dismiss" onclick="dismissRecommendation(${item.tmdbId})" title="${t("dismissRecommendationTitle")}">${icon("x", 14)} ${t("notInterested")}</button>`
             }
           </div>
         </div>
@@ -1963,6 +1998,7 @@ function renderDetailActions(movie, opts) {
       <div class="detail-actions">
         <button class="btn-primary" onclick="closeModal('modal-detail'); addRecommendationToWatchlist(${opts.tmdbId})">${icon("plus", 14)} ${t("myListBtn")}</button>
         <button class="btn-secondary" onclick="closeModal('modal-detail'); markRecommendationAsWatched(${opts.tmdbId})">${icon("check", 14)} ${t("watched")}</button>
+        <button class="btn-danger" onclick="closeModal('modal-detail'); dismissRecommendation(${opts.tmdbId})">${icon("x", 14)} ${t("notInterested")}</button>
       </div>
     `;
   }

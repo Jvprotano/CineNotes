@@ -5,7 +5,7 @@ module.exports = async (req, res) => {
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
 
-    const { code, password, movies, watchlist, tmdbKey } = req.body || {};
+    const { code, password, movies, watchlist, dismissed, tmdbKey } = req.body || {};
 
     if (!code || !password) {
       return res.status(400).json({ error: 'Código e senha são obrigatórios' });
@@ -30,6 +30,7 @@ module.exports = async (req, res) => {
 
     data.movies = movies || data.movies;
     data.watchlist = watchlist !== undefined ? watchlist : (data.watchlist || []);
+    data.dismissed = dismissed !== undefined ? dismissed : (data.dismissed || []);
     if (tmdbKey !== undefined) data.tmdbKey = tmdbKey;
     data.updatedAt = new Date().toISOString();
 

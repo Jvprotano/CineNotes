@@ -35,6 +35,8 @@ module.exports = async (req, res) => {
       salt,
       passwordHash,
       movies: [],
+      watchlist: [],
+      dismissed: [],
       tmdbKey: '',
       createdAt: new Date().toISOString(),
     };

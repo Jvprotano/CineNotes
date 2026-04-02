@@ -31,6 +31,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({
       movies: data.movies || [],
       watchlist: data.watchlist || [],
+      dismissed: data.dismissed || [],
       tmdbKey: data.tmdbKey || '',
     });
   } catch (err) {

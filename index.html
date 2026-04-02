@@ -4,19 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>CineNotes - Avaliem Filmes Juntos</title>
-    <meta name="title" content="CineNotes - Avaliem Filmes Juntos" />
+    <title>CineNotes | App para casais avaliarem filmes juntos</title>
+    <meta
+      name="title"
+      content="CineNotes | App para casais avaliarem filmes juntos"
+    />
     <meta
       name="description"
-      content="CineNotes: app para casais avaliarem filmes juntos, criarem uma watchlist privada e montarem um ranking com notas individuais ou conjuntas."
+      content="Criem uma sala privada para avaliar filmes juntos, montar uma watchlist compartilhada, registrar notas individuais ou conjuntas e receber recomendacoes melhores."
     />
     <meta
       name="keywords"
-      content="avaliacao de filmes em casal, ranking de filmes, watchlist de casal, avaliar filmes juntos, couple movie rating, movie ranking app, cinenotes"
+      content="app para casais, avaliar filmes juntos, watchlist compartilhada, ranking de filmes, recomendacoes de filmes, couple movie app, shared movie watchlist, cinenotes"
     />
     <meta name="author" content="CineNotes" />
-    <meta name="robots" content="index, follow" />
+    <meta name="application-name" content="CineNotes" />
+    <meta
+      name="robots"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
+    <meta
+      name="googlebot"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
     <meta name="language" content="pt-BR" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="format-detection" content="telephone=no" />
 
     <link rel="canonical" href="https://cinenotes.vercel.app/" />
     <link
@@ -32,7 +45,9 @@
     />
 
     <meta name="theme-color" content="#07111f" />
+    <meta name="color-scheme" content="dark" />
     <meta name="msapplication-navbutton-color" content="#07111f" />
+    <meta name="msapplication-TileColor" content="#07111f" />
     <meta
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
@@ -44,42 +59,72 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="image_src" href="https://cinenotes.vercel.app/assets/public-og.png" />
 
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://cinenotes.vercel.app/" />
-    <meta property="og:title" content="CineNotes - Avaliem Filmes Juntos" />
+    <meta
+      property="og:title"
+      content="CineNotes | App para casais avaliarem filmes juntos"
+    />
     <meta
       property="og:description"
-      content="Sala privada para casais avaliarem filmes, salvarem a watchlist e criarem um ranking compartilhado com visual premium."
+      content="Uma sala privada para casais guardarem a watchlist, darem notas individuais ou conjuntas e descobrirem filmes melhores para a proxima sessao."
     />
     <meta
       property="og:image"
-      content="https://cinenotes.vercel.app/og-image.png"
+      content="https://cinenotes.vercel.app/assets/public-og.png"
     />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:url"
+      content="https://cinenotes.vercel.app/assets/public-og.png"
+    />
+    <meta
+      property="og:image:secure_url"
+      content="https://cinenotes.vercel.app/assets/public-og.png"
+    />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1358" />
+    <meta property="og:image:height" content="677" />
     <meta
       property="og:image:alt"
-      content="CineNotes - Avaliem filmes juntos como casal"
+      content="Preview do CineNotes com visual cinematografico para casais avaliarem filmes juntos"
     />
     <meta property="og:locale" content="pt_BR" />
     <meta property="og:locale:alternate" content="en_US" />
     <meta property="og:site_name" content="CineNotes" />
 
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:domain" content="cinenotes.vercel.app" />
     <meta name="twitter:url" content="https://cinenotes.vercel.app/" />
-    <meta name="twitter:title" content="CineNotes - Avaliem Filmes Juntos" />
+    <meta
+      name="twitter:title"
+      content="CineNotes | App para casais avaliarem filmes juntos"
+    />
+    <meta
+      name="twitter:description"
+      content="Montem uma watchlist compartilhada, avaliem filmes juntos e recebam recomendacoes melhores para a proxima sessao."
+    />
     <meta
       name="twitter:description"
       content="O app para casais montarem uma watchlist, avaliarem filmes juntos e descobrirem recomendações melhores."
     />
     <meta
+      name="twitter:description"
+      content="Montem uma watchlist compartilhada, avaliem filmes juntos e recebam recomendacoes melhores para a proxima sessao."
+    />
+    <meta
       name="twitter:image"
-      content="https://cinenotes.vercel.app/og-image.png"
+      content="https://cinenotes.vercel.app/assets/public-og.png"
+    />
+    <meta
+      name="twitter:image:src"
+      content="https://cinenotes.vercel.app/assets/public-og.png"
     />
     <meta
       name="twitter:image:alt"
-      content="CineNotes - Avaliem filmes juntos como casal"
+      content="Preview do CineNotes com visual cinematografico para casais avaliarem filmes juntos"
     />
 
     <script type="application/ld+json">
@@ -110,6 +155,80 @@
           "@type": "Organization",
           "name": "CineNotes"
         }
+      }
+    </script>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://cinenotes.vercel.app/#website",
+            "url": "https://cinenotes.vercel.app/",
+            "name": "CineNotes",
+            "description": "App para casais avaliarem filmes juntos, organizarem uma watchlist privada e montarem um ranking compartilhado.",
+            "inLanguage": ["pt-BR", "en"],
+            "publisher": {
+              "@id": "https://cinenotes.vercel.app/#organization"
+            }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://cinenotes.vercel.app/#organization",
+            "name": "CineNotes",
+            "url": "https://cinenotes.vercel.app/",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://cinenotes.vercel.app/assets/logo.png"
+            },
+            "image": "https://cinenotes.vercel.app/assets/public-og.png"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://cinenotes.vercel.app/#app",
+            "name": "CineNotes",
+            "url": "https://cinenotes.vercel.app/",
+            "applicationCategory": "EntertainmentApplication",
+            "operatingSystem": "Any",
+            "browserRequirements": "Requires JavaScript and a modern web browser",
+            "description": "Sala privada para casais avaliarem filmes juntos, salvarem titulos na watchlist, registrarem notas individuais ou conjuntas e receberem recomendacoes melhores.",
+            "image": "https://cinenotes.vercel.app/assets/public-og.png",
+            "screenshot": "https://cinenotes.vercel.app/assets/public-og.png",
+            "featureList": [
+              "Salas privadas protegidas por senha",
+              "Watchlist compartilhada para o casal",
+              "Notas conjuntas ou individuais",
+              "Ranking de filmes assistidos",
+              "Busca de filmes com cartazes via TMDB",
+              "Recomendacoes personalizadas"
+            ],
+            "keywords": "avaliar filmes juntos, watchlist de casal, ranking de filmes, app para casais, recomendacoes de filmes",
+            "inLanguage": ["pt-BR", "en"],
+            "isAccessibleForFree": true,
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "BRL"
+            },
+            "publisher": {
+              "@id": "https://cinenotes.vercel.app/#organization"
+            }
+          }
+        ]
+      }
+    </script>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "ImageObject",
+        "contentUrl": "https://cinenotes.vercel.app/assets/public-og.png",
+        "url": "https://cinenotes.vercel.app/assets/public-og.png",
+        "name": "CineNotes social preview",
+        "description": "Imagem Open Graph oficial do CineNotes para compartilhamento em redes sociais.",
+        "width": 1358,
+        "height": 677
       }
     </script>
 
