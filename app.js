@@ -22,6 +22,92 @@ const savingIndicator = document.getElementById("saving-indicator");
 const DEV_MODE =
   location.hostname === "localhost" || location.hostname === "127.0.0.1";
 
+const analyticsState = {
+  lastViewKey: null,
+};
+
+function isAnalyticsEnabled() {
+  return !DEV_MODE && typeof window !== "undefined" && typeof window.gtag === "function";
+}
+
+function getAnalyticsLanguage() {
+  if (typeof userLang === "string" && userLang) return userLang;
+  return document.documentElement.lang || "pt-BR";
+}
+
+function trackEvent(name, params = {}) {
+  if (!isAnalyticsEnabled()) return;
+  window.gtag("event", name, {
+    app_name: "CineNotes",
+    language: getAnalyticsLanguage(),
+    ...params,
+  });
+}
+
+function getCurrentView() {
+  if (!session || app.style.display !== "block") {
+    const authMode =
+      document.querySelector(".login-tab.active")?.dataset.ltab === "create"
+        ? "create"
+        : "enter";
+
+    return authMode === "create"
+      ? {
+          key: "auth_create",
+          title: "Criar Sala",
+          path: "/auth/create",
+        }
+      : {
+          key: "auth_enter",
+          title: "Entrar",
+          path: "/auth/enter",
+        };
+  }
+
+  const viewMap = {
+    inicio: {
+      title: "Inicio",
+      path: "/app/inicio",
+    },
+    ranking: {
+      title: "Ranking Geral",
+      path: "/app/ranking",
+    },
+    ele: {
+      title: "Ranking Dele",
+      path: "/app/ele",
+    },
+    ela: {
+      title: "Ranking Dela",
+      path: "/app/ela",
+    },
+    todos: {
+      title: "Todos os Filmes",
+      path: "/app/todos",
+    },
+  };
+
+  const view = viewMap[currentTab] || viewMap.inicio;
+  return {
+    key: `app_${currentTab}`,
+    title: view.title,
+    path: view.path,
+  };
+}
+
+function trackCurrentView(force = false) {
+  const view = getCurrentView();
+  if (!view) return;
+  if (!force && analyticsState.lastViewKey === view.key) return;
+
+  analyticsState.lastViewKey = view.key;
+  trackEvent("page_view", {
+    page_title: `CineNotes | ${view.title}`,
+    page_path: view.path,
+    page_location: `${location.origin}${view.path}`,
+  });
+}
+
 function devGetRoom(code) {
   return JSON.parse(localStorage.getItem(`cinenotes_room_${code}`) || "null");
 }
@@ -246,6 +332,10 @@ document.querySelectorAll(".login-tab").forEach((tab) => {
       ? "flex"
       : "none";
     hideMessages();
+    trackEvent("login_mode_selected", {
+      mode: isCreate ? "create" : "enter",
+    });
+    trackCurrentView(true);
   });
 });
 
@@ -282,6 +372,11 @@ document.getElementById("form-enter").addEventListener("submit", async (e) => {
     movies = data.movies || [];
     watchlist = data.watchlist || [];
     dismissed = data.dismissed || [];
+    trackEvent("room_entered", {
+      method: "manual",
+      movies_count: movies.length,
+      watchlist_count: watchlist.length,
+    });
     enterApp();
   } catch (err) {
     showError(err.message);
@@ -307,6 +402,9 @@ document.getElementById("form-create").addEventListener("submit", async (e) => {
     watchlist = [];
     dismissed = [];
     recommendations = [];
+    trackEvent("room_created", {
+      method: "manual",
+    });
     setTimeout(enterApp, 800);
   } catch (err) {
     showError(err.message);
@@ -326,7 +424,10 @@ function enterApp() {
 
 // Auto-login if session exists
 async function tryAutoLogin() {
-  if (!session) return;
+  if (!session) {
+    trackCurrentView(true);
+    return;
+  }
   try {
     const data = await api("load", {
       code: session.code,
@@ -335,15 +436,22 @@ async function tryAutoLogin() {
     movies = data.movies || [];
     watchlist = data.watchlist || [];
     dismissed = data.dismissed || [];
+    trackEvent("room_entered", {
+      method: "session_restore",
+      movies_count: movies.length,
+      watchlist_count: watchlist.length,
+    });
     enterApp();
   } catch {
     session = null;
     sessionStorage.removeItem("cinenotes_session");
+    trackCurrentView(true);
   }
 }
 
 // Logout
 document.getElementById("btn-logout").addEventListener("click", () => {
+  trackEvent("logged_out");
   session = null;
   sessionStorage.removeItem("cinenotes_session");
   app.style.display = "none";
@@ -351,6 +459,7 @@ document.getElementById("btn-logout").addEventListener("click", () => {
   document.getElementById("form-enter").reset();
   document.getElementById("form-create").reset();
   hideMessages();
+  trackCurrentView(true);
 });
 
 // ========== Render ==========
@@ -849,6 +958,9 @@ async function openWatchlistDetail(watchlistId) {
   const item = watchlist.find((w) => w.id === watchlistId);
   if (!item) return;
 
+  trackEvent("movie_detail_opened", {
+    source: "watchlist",
+  });
   const content = document.getElementById("detail-content");
   const movieObj = buildDetailMovieObject(item);
 
@@ -879,6 +991,10 @@ async function openRecommendationDetail(tmdbId) {
   const item = recommendations.find((r) => r.tmdbId === tmdbId);
   if (!item) return;
 
+  trackEvent("movie_detail_opened", {
+    source: "recommendation",
+    recommendation_type: recommendationType,
+  });
   const content = document.getElementById("detail-content");
   const movieObj = buildDetailMovieObject(item);
 
@@ -943,6 +1059,9 @@ async function addRecommendationToWatchlist(tmdbId) {
 
   // Remove from recommendations list so it disappears immediately
   recommendations = recommendations.filter((r) => r.tmdbId !== tmdbId);
+  trackEvent("recommendation_added_to_watchlist", {
+    recommendation_type: recommendationType,
+  });
   render();
   await saveToServer();
 }
@@ -960,6 +1079,9 @@ async function dismissRecommendation(tmdbId) {
   }
 
   recommendations = recommendations.filter((r) => r.tmdbId !== tmdbId);
+  trackEvent("recommendation_dismissed", {
+    recommendation_type: recommendationType,
+  });
   render();
   await saveToServer();
   loadRecommendations();
@@ -998,6 +1120,9 @@ function openAddModal(target) {
     modalTitle.textContent = t("addMovies");
   }
 
+  trackEvent("add_modal_opened", {
+    target: addTarget,
+  });
   document.getElementById("modal-add").style.display = "flex";
 }
 
@@ -1032,6 +1157,11 @@ async function searchTMDB() {
   try {
     const data = await api("search", { query });
     searchResults = data.results || [];
+    trackEvent("movie_search", {
+      target: addTarget,
+      query_length: query.length,
+      results_count: searchResults.length,
+    });
 
     if (searchResults.length === 0) {
       resultsDiv.innerHTML =
@@ -1143,6 +1273,7 @@ function renderSelectedMovies() {
 
 async function submitSelectedMovies() {
   if (selectedMovies.length === 0) return;
+  const itemCount = selectedMovies.length;
 
   if (addTarget === "watchlist") {
     for (const sm of selectedMovies) {
@@ -1175,6 +1306,10 @@ async function submitSelectedMovies() {
     }
   }
 
+  trackEvent("movies_added", {
+    target: addTarget,
+    item_count: itemCount,
+  });
   selectedMovies = [];
   closeModal("modal-add");
   render();
@@ -1206,12 +1341,14 @@ function openMarkWatchedModal(watchlistId) {
 async function submitMarkWatched() {
   const isJoint = document.getElementById("mark-rating-joint").checked;
   let item;
+  let source = "watchlist";
 
   if (markWatchedSource) {
     // Coming from a recommendation
     item = markWatchedSource;
     recommendations = recommendations.filter((r) => r.tmdbId !== item.tmdbId);
     markWatchedSource = null;
+    source = "recommendation";
   } else {
     // Coming from watchlist
     const id = document.getElementById("mark-watched-id").value;
@@ -1243,6 +1380,10 @@ async function submitMarkWatched() {
 
   clearDismissedTmdbId(item.tmdbId);
 
+  trackEvent("movie_marked_watched", {
+    source,
+    rating_mode: isJoint ? "joint" : "individual",
+  });
   closeModal("modal-mark-watched");
   render();
   await saveToServer();
@@ -1252,6 +1393,7 @@ async function submitMarkWatched() {
 async function removeFromWatchlist(id) {
   if (!confirm(t("confirmRemoveFromList"))) return;
   watchlist = watchlist.filter((w) => w.id !== id);
+  trackEvent("watchlist_item_removed");
   render();
   await saveToServer();
 }
@@ -1281,6 +1423,9 @@ async function openDetailModal(movieId) {
   const movie = movies.find((m) => m.id === movieId);
   if (!movie) return;
 
+  trackEvent("movie_detail_opened", {
+    source: "library",
+  });
   const content = document.getElementById("detail-content");
   content.innerHTML = renderDetailBasic(movie);
   refreshIcons();
@@ -1411,6 +1556,9 @@ function openEditModal(id) {
   const movie = movies.find((m) => m.id === id);
   if (!movie) return;
 
+  trackEvent("movie_edit_opened", {
+    has_rating: getEffectiveRating(movie) !== null,
+  });
   document.getElementById("edit-id").value = movie.id;
   document.getElementById("edit-title").value = movie.title;
   document.getElementById("edit-year").value = movie.year || "";
@@ -1505,6 +1653,10 @@ document.getElementById("form-edit").addEventListener("submit", async (e) => {
     clearDismissedTmdbId(movies[idx].tmdbId);
   }
 
+  trackEvent("movie_updated", {
+    rating_mode: isJoint ? "joint" : "individual",
+    has_tmdb: Boolean(movies[idx].tmdbId),
+  });
   closeModal("modal-edit");
   render();
   await saveToServer();
@@ -1516,6 +1668,7 @@ document.getElementById("btn-delete").addEventListener("click", async () => {
   const id = document.getElementById("edit-id").value;
   if (!confirm(t("confirmDelete"))) return;
   movies = movies.filter((m) => m.id !== id);
+  trackEvent("movie_deleted");
   closeModal("modal-edit");
   render();
   await saveToServer();
@@ -1702,6 +1855,7 @@ function render() {
 
   setTimeout(() => updateSliderArrows("movie-grid"), 100);
   refreshIcons();
+  trackCurrentView();
 }
 
 function renderWatchlist() {
@@ -1906,6 +2060,9 @@ function openAddModal(target) {
   modalTitle.textContent =
     addTarget === "watchlist" ? t("addToMyListModal") : t("addMovies");
 
+  trackEvent("add_modal_opened", {
+    target: addTarget,
+  });
   document.getElementById("modal-add").style.display = "flex";
 }
 
@@ -1919,6 +2076,11 @@ async function searchTMDB() {
   try {
     const data = await api("search", { query });
     searchResults = data.results || [];
+    trackEvent("movie_search", {
+      target: addTarget,
+      query_length: query.length,
+      results_count: searchResults.length,
+    });
 
     if (searchResults.length === 0) {
       resultsDiv.innerHTML =
