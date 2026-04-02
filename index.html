@@ -114,6 +114,7 @@
     </script>
 
     <link rel="stylesheet" href="style.css" />
+    <script src="i18n.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -130,59 +131,61 @@
           <h1 class="login-title">
             <span class="brand-wordmark">CineNotes</span>
           </h1>
-          <p class="login-subtitle">
+          <p class="login-subtitle" data-i18n="loginSubtitle">
             Um espaço privado para o casal guardar a watchlist, avaliar o que já
             viu e transformar cada sessão em um ranking bonito de acompanhar.
           </p>
         </div>
 
         <div class="login-tabs">
-          <button class="login-tab active" data-ltab="enter">Entrar</button>
-          <button class="login-tab" data-ltab="create">Criar sala</button>
+          <button class="login-tab active" data-ltab="enter" data-i18n="tabEnter">Entrar</button>
+          <button class="login-tab" data-ltab="create" data-i18n="tabCreate">Criar sala</button>
         </div>
 
         <form id="form-enter" class="login-form">
           <div class="form-group">
-            <label for="enter-code">Código da sala</label>
+            <label for="enter-code" data-i18n="labelRoomCode">Código da sala</label>
             <input
               type="text"
               id="enter-code"
               placeholder="ex: joao-maria"
+              data-i18n-placeholder="placeholderCode"
               required
             />
           </div>
           <div class="form-group">
-            <label for="enter-pass">Senha</label>
+            <label for="enter-pass" data-i18n="labelPassword">Senha</label>
             <input type="password" id="enter-pass" required />
           </div>
-          <button type="submit" class="btn-primary btn-full">Entrar</button>
+          <button type="submit" class="btn-primary btn-full" data-i18n="btnEnter">Entrar</button>
         </form>
 
         <div class="login-highlights" aria-hidden="true">
-          <span>Sem cadastro</span>
-          <span>Watchlist</span>
-          <span>Ranking do casal</span>
+          <span data-i18n="highlightNoSignup">Sem cadastro</span>
+          <span data-i18n="highlightWatchlist">Watchlist</span>
+          <span data-i18n="highlightCoupleRanking">Ranking do casal</span>
         </div>
 
         <form id="form-create" class="login-form" style="display: none">
           <div class="form-group">
-            <label for="create-code">Escolha um código</label>
+            <label for="create-code" data-i18n="labelChooseCode">Escolha um código</label>
             <input
               type="text"
               id="create-code"
               placeholder="ex: joao-maria"
+              data-i18n-placeholder="placeholderCode"
               minlength="3"
               maxlength="30"
               required
             />
-            <span class="form-hint">Mínimo de 3 caracteres, sem espaços</span>
+            <span class="form-hint" data-i18n="hintMinChars">Mínimo de 3 caracteres, sem espaços</span>
           </div>
           <div class="form-group">
-            <label for="create-pass">Defina uma senha</label>
+            <label for="create-pass" data-i18n="labelSetPassword">Defina uma senha</label>
             <input type="password" id="create-pass" minlength="4" required />
-            <span class="form-hint">Mínimo de 4 caracteres</span>
+            <span class="form-hint" data-i18n="hintMinPassword">Mínimo de 4 caracteres</span>
           </div>
-          <button type="submit" class="btn-primary btn-full">Criar sala</button>
+          <button type="submit" class="btn-primary btn-full" data-i18n="btnCreateRoom">Criar sala</button>
         </form>
 
         <div id="login-error" class="login-error" style="display: none"></div>
@@ -210,11 +213,11 @@
                     <span class="brand-wordmark">CineNotes</span>
                   </h1>
                   <div class="room-pill">
-                    <span>Sala ativa</span>
+                    <span data-i18n="roomActive">Sala ativa</span>
                     <strong id="room-name"></strong>
                   </div>
                 </div>
-                <p class="subtitle">
+                <p class="subtitle" data-i18n="headerSubtitle">
                   Organize a próxima sessão, descubra novos filmes e mantenha o
                   ranking do casal em dia.
                 </p>
@@ -223,9 +226,9 @@
               <div class="header-actions">
                 <button id="btn-add" class="btn-primary">
                   <i data-lucide="plus"></i>
-                  Adicionar filme
+                  <span data-i18n="btnAddMovie">Adicionar filme</span>
                 </button>
-                <button id="btn-logout" class="btn-icon" title="Sair da sala">
+                <button id="btn-logout" class="btn-icon" data-i18n-title="btnLogoutTitle" title="Sair da sala">
                   <i data-lucide="log-out"></i>
                 </button>
               </div>
@@ -234,23 +237,23 @@
             <nav class="tabs">
               <button class="tab active" data-tab="inicio">
                 <i data-lucide="layout-grid"></i>
-                Início
+                <span data-i18n="tabHome">Início</span>
               </button>
               <button class="tab" data-tab="ranking">
                 <i data-lucide="trophy"></i>
-                Ranking
+                <span data-i18n="tabRanking">Ranking</span>
               </button>
               <button class="tab" data-tab="ele">
                 <i data-lucide="user"></i>
-                Dele
+                <span data-i18n="tabHis">Dele</span>
               </button>
               <button class="tab" data-tab="ela">
                 <i data-lucide="heart"></i>
-                Dela
+                <span data-i18n="tabHers">Dela</span>
               </button>
               <button class="tab" data-tab="todos">
                 <i data-lucide="film"></i>
-                Todos
+                <span data-i18n="tabAll">Todos</span>
               </button>
             </nav>
           </div>
@@ -261,7 +264,7 @@
           class="saving-indicator"
           style="display: none"
         >
-          Salvando alterações...
+          <span data-i18n="savingChanges">Salvando alterações...</span>
         </div>
 
         <main class="app-main">
@@ -277,8 +280,8 @@
             <section class="slider-section" id="watchlist-section">
               <div class="slider-header">
                 <div class="slider-meta">
-                  <h2><i data-lucide="bookmark"></i> Minha lista</h2>
-                  <p class="slider-support">
+                  <h2><i data-lucide="bookmark"></i> <span data-i18n="myList">Minha lista</span></h2>
+                  <p class="slider-support" data-i18n="myListDesc">
                     Filmes que ainda estão no radar antes de entrar no ranking.
                   </p>
                 </div>
@@ -287,6 +290,7 @@
                   <button
                     class="btn-icon btn-refresh-recs"
                     onclick="openAddModal('watchlist')"
+                    data-i18n-title="addToList"
                     title="Adicionar à lista"
                   >
                     <i data-lucide="plus"></i>
@@ -321,8 +325,8 @@
                   <i data-lucide="bookmark-plus"></i>
                 </div>
                 <div class="section-empty-copy">
-                  <h3>Nada salvo por aqui ainda</h3>
-                  <p>
+                  <h3 data-i18n="emptyListTitle">Nada salvo por aqui ainda</h3>
+                  <p data-i18n="emptyListDesc">
                     Guardem os próximos filmes que querem ver juntos e montem a
                     fila da próxima maratona.
                   </p>
@@ -330,6 +334,7 @@
                 <button
                   class="btn-secondary"
                   onclick="openAddModal('watchlist')"
+                  data-i18n="addToList"
                 >
                   Adicionar à lista
                 </button>
@@ -343,9 +348,9 @@
             >
               <div class="slider-header">
                 <div class="slider-meta">
-                  <span class="slider-kicker">Descobertas</span>
-                  <h2><i data-lucide="sparkles"></i> Recomendações</h2>
-                  <p class="slider-support">
+                  <span class="slider-kicker" data-i18n="discoveries">Descobertas</span>
+                  <h2><i data-lucide="sparkles"></i> <span data-i18n="recommendations">Recomendações</span></h2>
+                  <p class="slider-support" data-i18n="recsDesc">
                     Sugestões calibradas pelo histórico de vocês e pelo que está
                     em alta agora.
                   </p>
@@ -356,6 +361,7 @@
                     class="btn-icon btn-refresh-recs"
                     id="btn-refresh-recs"
                     onclick="loadRecommendations()"
+                    data-i18n-title="refreshRecsTitle"
                     title="Atualizar recomendações"
                   >
                     <i data-lucide="refresh-cw"></i>
@@ -416,13 +422,13 @@
             <div class="empty-state" id="empty-state" style="display: none">
               <div class="empty-state-panel">
                 <img src="assets/logo.png" alt="CineNotes" class="empty-icon" />
-                <span class="empty-kicker">Comecem por aqui</span>
-                <h2>O ranking ainda está em branco</h2>
-                <p>
+                <span class="empty-kicker" data-i18n="emptyDefault.kicker">Comecem por aqui</span>
+                <h2 data-i18n="emptyDefault.title">O ranking ainda está em branco</h2>
+                <p data-i18n="emptyDefault.description">
                   Adicionem os filmes assistidos ou montem a watchlist para a
                   experiência ficar completa.
                 </p>
-                <button class="btn-primary" onclick="openAddModal('watchlist')">
+                <button class="btn-primary" onclick="openAddModal('watchlist')" data-i18n="emptyDefault.actionLabel">
                   Adicionar primeiro filme
                 </button>
               </div>
@@ -435,8 +441,8 @@
         <div class="modal">
           <div class="modal-header">
             <div>
-              <span class="modal-kicker">Catálogo</span>
-              <h2>Adicionar filmes</h2>
+              <span class="modal-kicker" data-i18n="catalog">Catálogo</span>
+              <h2 data-i18n="addMovies">Adicionar filmes</h2>
             </div>
             <button class="btn-close" onclick="closeModal('modal-add')">
               &times;
@@ -444,15 +450,16 @@
           </div>
           <div class="modal-body">
             <div class="search-section" id="search-section">
-              <label for="search-input">Buscar filme</label>
+              <label for="search-input" data-i18n="searchMovie">Buscar filme</label>
               <div class="search-box">
                 <input
                   type="text"
                   id="search-input"
                   placeholder="Digite o nome do filme..."
+                  data-i18n-placeholder="searchPlaceholder"
                   autocomplete="off"
                 />
-                <button type="button" id="btn-search" class="btn-secondary">
+                <button type="button" id="btn-search" class="btn-secondary" data-i18n="btnSearch">
                   Buscar
                 </button>
               </div>
@@ -465,7 +472,7 @@
               style="display: none"
             >
               <h3 class="section-title">
-                Filmes selecionados (<span id="selected-count">0</span>)
+                <span data-i18n="selectedMovies">Filmes selecionados</span> (<span id="selected-count">0</span>)
               </h3>
               <div id="selected-list" class="selected-list"></div>
               <button
@@ -474,7 +481,7 @@
                 id="btn-submit-selected"
                 onclick="submitSelectedMovies()"
               >
-                Adicionar filmes
+                <span data-i18n="addMovies">Adicionar filmes</span>
               </button>
             </div>
           </div>
@@ -485,8 +492,8 @@
         <div class="modal">
           <div class="modal-header">
             <div>
-              <span class="modal-kicker">Ajuste rápido</span>
-              <h2>Editar filme</h2>
+              <span class="modal-kicker" data-i18n="quickEdit">Ajuste rápido</span>
+              <h2 data-i18n="editMovie">Editar filme</h2>
             </div>
             <button class="btn-close" onclick="closeModal('modal-edit')">
               &times;
@@ -498,26 +505,26 @@
 
               <div class="form-row">
                 <div class="form-group flex-1">
-                  <label for="edit-title">Título</label>
+                  <label for="edit-title" data-i18n="labelTitle">Título</label>
                   <input type="text" id="edit-title" required />
                 </div>
                 <div class="form-group form-group-sm">
-                  <label for="edit-year">Ano</label>
+                  <label for="edit-year" data-i18n="labelYear">Ano</label>
                   <input type="number" id="edit-year" min="1900" max="2030" />
                 </div>
               </div>
 
               <div class="form-group">
-                <label for="edit-poster">URL do cartaz</label>
+                <label for="edit-poster" data-i18n="labelPosterUrl">URL do cartaz</label>
                 <input type="text" id="edit-poster" />
               </div>
 
               <div class="form-group">
-                <label for="edit-genre">Gênero</label>
+                <label for="edit-genre" data-i18n="labelGenre">Gênero</label>
                 <input type="text" id="edit-genre" />
               </div>
 
-              <h3 class="section-title">Notas de 0 a 10</h3>
+              <h3 class="section-title" data-i18n="ratingsTitle">Notas de 0 a 10</h3>
 
               <div class="rating-section">
                 <div class="rating-option">
@@ -528,7 +535,7 @@
                     id="edit-rating-joint"
                     checked
                   />
-                  <label for="edit-rating-joint">Nota conjunta</label>
+                  <label for="edit-rating-joint" data-i18n="jointRating">Nota conjunta</label>
                 </div>
                 <div class="rating-option">
                   <input
@@ -537,13 +544,13 @@
                     value="individual"
                     id="edit-rating-individual"
                   />
-                  <label for="edit-rating-individual">Notas individuais</label>
+                  <label for="edit-rating-individual" data-i18n="individualRatings">Notas individuais</label>
                 </div>
               </div>
 
               <div id="edit-joint-rating" class="rating-inputs">
                 <div class="form-group">
-                  <label for="edit-rate-joint">Nota do casal</label>
+                  <label for="edit-rate-joint" data-i18n="coupleRating">Nota do casal</label>
                   <div class="rating-slider-group">
                     <input
                       type="range"
@@ -567,7 +574,7 @@
               >
                 <div class="form-row">
                   <div class="form-group flex-1">
-                    <label for="edit-rate-him">Nota dele</label>
+                    <label for="edit-rate-him" data-i18n="hisRating">Nota dele</label>
                     <div class="rating-slider-group">
                       <input
                         type="range"
@@ -583,7 +590,7 @@
                     </div>
                   </div>
                   <div class="form-group flex-1">
-                    <label for="edit-rate-her">Nota dela</label>
+                    <label for="edit-rate-her" data-i18n="herRating">Nota dela</label>
                     <div class="rating-slider-group">
                       <input
                         type="range"
@@ -602,10 +609,10 @@
               </div>
 
               <div class="form-actions">
-                <button type="submit" class="btn-primary flex-1">
+                <button type="submit" class="btn-primary flex-1" data-i18n="saveChanges">
                   Salvar alterações
                 </button>
-                <button type="button" class="btn-danger" id="btn-delete">
+                <button type="button" class="btn-danger" id="btn-delete" data-i18n="deleteBtn">
                   Excluir
                 </button>
               </div>
@@ -618,8 +625,8 @@
         <div class="modal modal-lg">
           <div class="modal-header">
             <div>
-              <span class="modal-kicker">Ficha do filme</span>
-              <h2>Detalhes</h2>
+              <span class="modal-kicker" data-i18n="movieSheet">Ficha do filme</span>
+              <h2 data-i18n="details">Detalhes</h2>
             </div>
             <button class="btn-close" onclick="closeModal('modal-detail')">
               &times;
@@ -633,8 +640,8 @@
         <div class="modal modal-sm">
           <div class="modal-header">
             <div>
-              <span class="modal-kicker">Watchlist</span>
-              <h2>Marcar como assistido</h2>
+              <span class="modal-kicker" data-i18n="highlightWatchlist">Watchlist</span>
+              <h2 data-i18n="markAsWatched">Marcar como assistido</h2>
             </div>
             <button
               class="btn-close"
@@ -647,7 +654,7 @@
             <p id="mark-watched-title" class="modal-emphasis"></p>
             <input type="hidden" id="mark-watched-id" />
 
-            <h3 class="section-title">Notas de 0 a 10</h3>
+            <h3 class="section-title" data-i18n="ratingsTitle">Notas de 0 a 10</h3>
 
             <div class="rating-section">
               <div class="rating-option">
@@ -658,7 +665,7 @@
                   id="mark-rating-joint"
                   checked
                 />
-                <label for="mark-rating-joint">Nota conjunta</label>
+                <label for="mark-rating-joint" data-i18n="jointRating">Nota conjunta</label>
               </div>
               <div class="rating-option">
                 <input
@@ -667,13 +674,13 @@
                   value="individual"
                   id="mark-rating-individual"
                 />
-                <label for="mark-rating-individual">Notas individuais</label>
+                <label for="mark-rating-individual" data-i18n="individualRatings">Notas individuais</label>
               </div>
             </div>
 
             <div id="mark-joint-rating" class="rating-inputs">
               <div class="form-group">
-                <label for="mark-rate-joint">Nota do casal</label>
+                <label for="mark-rate-joint" data-i18n="coupleRating">Nota do casal</label>
                 <div class="rating-slider-group">
                   <input
                     type="range"
@@ -695,7 +702,7 @@
             >
               <div class="form-row">
                 <div class="form-group flex-1">
-                  <label for="mark-rate-him">Nota dele</label>
+                  <label for="mark-rate-him" data-i18n="hisRating">Nota dele</label>
                   <div class="rating-slider-group">
                     <input
                       type="range"
@@ -709,7 +716,7 @@
                   </div>
                 </div>
                 <div class="form-group flex-1">
-                  <label for="mark-rate-her">Nota dela</label>
+                  <label for="mark-rate-her" data-i18n="herRating">Nota dela</label>
                   <div class="rating-slider-group">
                     <input
                       type="range"
@@ -726,7 +733,7 @@
             </div>
 
             <div class="form-actions form-actions-single">
-              <button class="btn-primary flex-1" onclick="submitMarkWatched()">
+              <button class="btn-primary flex-1" onclick="submitMarkWatched()" data-i18n="saveAndMove">
                 Salvar e mover para o ranking
               </button>
             </div>

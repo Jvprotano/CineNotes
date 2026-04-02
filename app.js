@@ -37,11 +37,11 @@ function devApi(endpoint, body) {
       .trim()
       .replace(/[^a-z0-9-_]/g, "");
     if (cleanCode.length < 3 || cleanCode.length > 30)
-      throw new Error("Código deve ter entre 3 e 30 caracteres");
+      throw new Error(t("errCodeLength"));
     if (!password || password.length < 4)
-      throw new Error("Senha deve ter no mínimo 4 caracteres");
+      throw new Error(t("errPasswordLength"));
     if (devGetRoom(cleanCode))
-      throw new Error("Este código já está em uso. Escolha outro.");
+      throw new Error(t("errCodeTaken"));
     devSetRoom(cleanCode, { password, movies: [], watchlist: [], tmdbKey: "" });
     return { ok: true };
   }
@@ -51,8 +51,8 @@ function devApi(endpoint, body) {
       .trim()
       .replace(/[^a-z0-9-_]/g, "");
     const room = devGetRoom(cleanCode);
-    if (!room) throw new Error("Sala não encontrada");
-    if (room.password !== password) throw new Error("Senha incorreta");
+    if (!room) throw new Error(t("errRoomNotFound"));
+    if (room.password !== password) throw new Error(t("errWrongPassword"));
     return {
       movies: room.movies || [],
       watchlist: room.watchlist || [],
@@ -65,8 +65,8 @@ function devApi(endpoint, body) {
       .trim()
       .replace(/[^a-z0-9-_]/g, "");
     const room = devGetRoom(cleanCode);
-    if (!room) throw new Error("Sala não encontrada");
-    if (room.password !== password) throw new Error("Senha incorreta");
+    if (!room) throw new Error(t("errRoomNotFound"));
+    if (room.password !== password) throw new Error(t("errWrongPassword"));
     room.movies = body.movies || room.movies;
     room.watchlist =
       body.watchlist !== undefined ? body.watchlist : room.watchlist || [];
@@ -83,10 +83,14 @@ async function api(endpoint, body) {
   if (DEV_MODE && ["create", "load", "save"].includes(endpoint)) {
     return devApi(endpoint, body);
   }
+  // Inject language for TMDB-facing endpoints
+  const langBody = ["search", "details", "recommendations"].includes(endpoint)
+    ? { ...body, lang: userLang === "pt-BR" ? "pt-BR" : "en" }
+    : body;
   const res = await fetch(`/api/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(langBody),
   });
   const text = await res.text();
   let data;
@@ -94,10 +98,10 @@ async function api(endpoint, body) {
     data = JSON.parse(text);
   } catch {
     throw new Error(
-      "Erro no servidor. Verifique se o Blob Store está conectado ao projeto na Vercel.",
+      t("errServer"),
     );
   }
-  if (!res.ok) throw new Error(data.error || "Erro desconhecido");
+  if (!res.ok) throw new Error(data.error || t("errUnknown"));
   return data;
 }
 
@@ -113,7 +117,7 @@ async function saveToServer() {
     });
   } catch (err) {
     console.error("Erro ao salvar:", err);
-    alert("Erro ao salvar: " + err.message);
+    alert(t("errSave", err.message));
   } finally {
     setTimeout(() => {
       savingIndicator.style.display = "none";
@@ -290,7 +294,7 @@ document.getElementById("form-create").addEventListener("submit", async (e) => {
 
   try {
     await api("create", { code, password });
-    showSuccess("Sala criada! Entrando...");
+    showSuccess(t("roomCreated"));
     session = { code, password };
     sessionStorage.setItem("cinenotes_session", JSON.stringify(session));
     movies = [];
@@ -364,7 +368,7 @@ function render() {
   let sorted = [...movies];
   let showRank = true;
   let ratingFn = getEffectiveRating;
-  let rankingLabel = `${icon("trophy")} Ranking`;
+  let rankingLabel = `${icon("trophy")} ${t("ranking")}`;
 
   switch (currentTab) {
     case "inicio":
@@ -373,19 +377,19 @@ function render() {
         (a, b) => (getEffectiveRating(b) ?? -1) - (getEffectiveRating(a) ?? -1),
       );
       ratingFn = getEffectiveRating;
-      rankingLabel = `${icon("trophy")} Ranking Geral`;
+      rankingLabel = `${icon("trophy")} ${t("rankingGeneral")}`;
       break;
     case "ele":
       sorted = sorted.filter((m) => getHisRating(m) !== null);
       sorted.sort((a, b) => getHisRating(b) - getHisRating(a));
       ratingFn = getHisRating;
-      rankingLabel = `${icon("user")} Ranking Dele`;
+      rankingLabel = `${icon("user")} ${t("rankingHis")}`;
       break;
     case "ela":
       sorted = sorted.filter((m) => getHerRating(m) !== null);
       sorted.sort((a, b) => getHerRating(b) - getHerRating(a));
       ratingFn = getHerRating;
-      rankingLabel = `${icon("heart")} Ranking Dela`;
+      rankingLabel = `${icon("heart")} ${t("rankingHers")}`;
       break;
     case "todos":
       sorted.sort((a, b) =>
@@ -393,7 +397,7 @@ function render() {
       );
       showRank = false;
       ratingFn = getEffectiveRating;
-      rankingLabel = `${icon("film")} Todos os Filmes`;
+      rankingLabel = `${icon("film")} ${t("allMovies")}`;
       break;
   }
 
@@ -411,7 +415,7 @@ function render() {
     emptyState.style.display = "none";
     rankingSection.style.display = isRanking || isTodos ? "block" : "none";
     rankingSlider.style.display = sorted.length > 0 ? "block" : "none";
-    rankingCount.textContent = `${sorted.length} filme${sorted.length !== 1 ? "s" : ""}`;
+    rankingCount.textContent = t("nMovies", sorted.length);
   }
 
   if (isHome) {
@@ -440,7 +444,7 @@ function render() {
 
       let detailParts = [];
       if (movie.ratingJoint !== null && movie.ratingJoint !== undefined) {
-        detailParts.push(`Conjunta: ${formatRating(movie.ratingJoint)}`);
+        detailParts.push(`${t("joint")}: ${formatRating(movie.ratingJoint)}`);
       }
       if (movie.ratingHim !== null && movie.ratingHim !== undefined) {
         detailParts.push(
@@ -456,9 +460,9 @@ function render() {
       const ratingDisplay =
         rating !== null && rating !== undefined
           ? rating.toFixed(1)
-          : "Sem nota";
+          : t("noRating");
 
-      const infoBtn = `<button class="btn-info" onclick="event.stopPropagation(); openDetailModal('${movie.id}')" title="Detalhes do filme">${icon("info", 16)}</button>`;
+      const infoBtn = `<button class="btn-info" onclick="event.stopPropagation(); openDetailModal('${movie.id}')" title="${t("movieDetails")}">${icon("info", 16)}</button>`;
 
       return `
       <div class="movie-card" onclick="openEditModal('${movie.id}')">
@@ -502,7 +506,7 @@ function renderWatchlist() {
 
   emptyEl.style.display = "none";
   content.style.display = "block";
-  countEl.textContent = `${watchlist.length} filme${watchlist.length > 1 ? "s" : ""}`;
+  countEl.textContent = t("nMovies", watchlist.length);
 
   track.innerHTML = watchlist
     .map((item) => {
@@ -512,15 +516,15 @@ function renderWatchlist() {
 
       return `
       <div class="watchlist-card">
-        <button class="btn-info" onclick="event.stopPropagation(); openWatchlistDetail('${item.id}')" title="Detalhes do filme">${icon("info", 16)}</button>
+        <button class="btn-info" onclick="event.stopPropagation(); openWatchlistDetail('${item.id}')" title="${t("movieDetails")}">${icon("info", 16)}</button>
         <div class="poster-container">${posterHtml}</div>
         <div class="card-info">
           <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
           ${item.year ? `<div class="card-year">${item.year}</div>` : ""}
           ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ""}
           <div class="watchlist-actions">
-            <button class="btn-watched" onclick="openMarkWatchedModal('${item.id}')" title="Marcar como assistido">✓ Assistido</button>
-            <button class="btn-remove-wl" onclick="removeFromWatchlist('${item.id}')" title="Remover">✕</button>
+            <button class="btn-watched" onclick="openMarkWatchedModal('${item.id}')" title="${t("markAsWatched")}">✓ ${t("watched")}</button>
+            <button class="btn-remove-wl" onclick="removeFromWatchlist('${item.id}')" title="${t("remove")}">✕</button>
           </div>
         </div>
       </div>
@@ -551,9 +555,9 @@ function renderStats() {
       : null;
 
   statsBar.innerHTML = `
-    <span class="stat-item">${icon("clapperboard", 14)} <strong>${total}</strong> filme${total > 1 ? "s" : ""}</span>
-    ${rated.length > 0 ? `<span class="stat-item">⭐ Média geral: <strong>${avgAll.toFixed(1)}</strong></span>` : ""}
-    ${best ? `<span class="stat-item">${icon("trophy", 14)} Melhor: <strong>${escapeHtml(best.title)}</strong> (${getEffectiveRating(best).toFixed(1)})</span>` : ""}
+    <span class="stat-item">${icon("clapperboard", 14)} <strong>${total}</strong> ${t("nMovies", total)}</span>
+    ${rated.length > 0 ? `<span class="stat-item">⭐ ${t("average")}: <strong>${avgAll.toFixed(1)}</strong></span>` : ""}
+    ${best ? `<span class="stat-item">${icon("trophy", 14)} ${t("currentTop")}: <strong>${escapeHtml(best.title)}</strong> (${getEffectiveRating(best).toFixed(1)})</span>` : ""}
   `;
   refreshIcons();
 }
@@ -571,12 +575,12 @@ function renderPendingRatingsBanner() {
     .slice(0, 3)
     .map((m) => `<strong>${escapeHtml(m.title)}</strong>`);
   let text = names.join(", ");
-  if (unrated.length > 3) text += ` e mais ${unrated.length - 3}`;
+  if (unrated.length > 3) text += ` ${t("andMore", unrated.length - 3)}`;
 
   banner.innerHTML = `
     ${icon("alert-circle", 14)}
-    <span>${unrated.length} filme${unrated.length > 1 ? "s" : ""} sem nota: ${text}</span>
-    <button class="btn-pending-rate" onclick="openEditModal('${unrated[0].id}')">Avaliar agora</button>
+    <span>${t("pendingBanner", unrated.length, text)}</span>
+    <button class="btn-pending-rate" onclick="openEditModal('${unrated[0].id}')">${t("rateNow")}</button>
   `;
   banner.style.display = "flex";
   refreshIcons();
@@ -585,25 +589,18 @@ function renderPendingRatingsBanner() {
 // ========== Recommendations ==========
 // TMDB genre name -> ID reverse map
 const GENRE_NAME_TO_ID = {
-  Ação: 28,
-  Aventura: 12,
-  Animação: 16,
-  Comédia: 35,
-  Crime: 80,
-  Documentário: 99,
-  Drama: 18,
-  Família: 10751,
-  Fantasia: 14,
-  História: 36,
-  Terror: 27,
-  Música: 10402,
-  Mistério: 9648,
-  Romance: 10749,
-  "Ficção Científica": 878,
-  Telefilme: 10770,
-  Suspense: 53,
-  Guerra: 10752,
+  // PT-BR
+  Ação: 28, Aventura: 12, Animação: 16, Comédia: 35, Crime: 80,
+  Documentário: 99, Drama: 18, Família: 10751, Fantasia: 14, História: 36,
+  Terror: 27, Música: 10402, Mistério: 9648, Romance: 10749,
+  "Ficção Científica": 878, Telefilme: 10770, Suspense: 53, Guerra: 10752,
   Faroeste: 37,
+  // EN
+  Action: 28, Adventure: 12, Animation: 16, Comedy: 35,
+  Documentary: 99, Family: 10751, Fantasy: 14, History: 36,
+  Horror: 27, Music: 10402, Mystery: 9648,
+  "Science Fiction": 878, "TV Movie": 10770, Thriller: 53, War: 10752,
+  Western: 37,
 };
 
 function computeSeedThreshold() {
@@ -731,7 +728,7 @@ async function loadRecommendations() {
   const track = document.getElementById("recommendations-track");
 
   track.innerHTML =
-    '<p style="padding:10px;color:var(--text-muted);white-space:nowrap;">Carregando recomendações...</p>';
+    `<p style="padding:10px;color:var(--text-muted);white-space:nowrap;">${t("loadingRecs")}</p>`;
   section.style.display = "block";
 
   try {
@@ -772,17 +769,16 @@ function renderRecommendations() {
 
   if (recommendationType === "personalized") {
     const signalCount = buildRecommendationSignals().length;
-    typeEl.textContent = `Baseado em ${signalCount} sinais do seu perfil`;
+    typeEl.textContent = t("basedOnSignals", signalCount);
     hintEl.style.display = "none";
   } else {
-    typeEl.textContent = "Em alta esta semana";
+    typeEl.textContent = t("trendingThisWeek");
     const signalCount = buildRecommendationSignals().length;
     if (signalCount < 3) {
       const remaining = 3 - signalCount;
-      hintEl.innerHTML = `${icon("info", 14)} Adicionem mais <strong>${remaining}</strong> filme${remaining > 1 ? "s" : ""} avaliado${remaining > 1 ? "s" : ""} ou na watchlist para enriquecer as recomendações`;
+      hintEl.innerHTML = `${icon("info", 14)} ${t("addMoreMovies", remaining)}`;
     } else {
-      hintEl.textContent =
-        "Nenhuma recomendação personalizada forte foi encontrada para o perfil atual";
+      hintEl.textContent = t("noStrongRecs");
     }
     hintEl.style.display = "block";
   }
@@ -799,7 +795,7 @@ function renderRecommendations() {
 
       return `
       <div class="watchlist-card recommendation-card">
-        <button class="btn-info" onclick="event.stopPropagation(); openRecommendationDetail(${item.tmdbId})" title="Detalhes do filme">${icon("info", 16)}</button>
+        <button class="btn-info" onclick="event.stopPropagation(); openRecommendationDetail(${item.tmdbId})" title="${t("movieDetails")}">${icon("info", 16)}</button>
         <div class="poster-container">${posterHtml}</div>
         <div class="card-info">
           <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
@@ -809,9 +805,9 @@ function renderRecommendations() {
           <div class="watchlist-actions rec-actions">
             ${
               alreadyInList
-                ? '<button class="btn-watched" disabled style="opacity:0.5;">Já adicionado</button>'
-                : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="Adicionar à minha lista">+ Lista</button>
-                 <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="Marcar como assistido">✓ Assistido</button>`
+                ? '<button class="btn-watched" disabled style="opacity:0.5;">${t("alreadyAdded")}</button>'
+                : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="${t("addToMyListModal")}">${t("addToMyList")}</button>
+                 <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="${t("markAsWatched")}">✓ ${t("watched")}</button>`
             }
           </div>
         </div>
@@ -969,9 +965,9 @@ function openAddModal(target) {
   // Update modal title based on target
   const modalTitle = document.querySelector("#modal-add .modal-header h2");
   if (addTarget === "watchlist") {
-    modalTitle.textContent = "Adicionar à Minha Lista";
+    modalTitle.textContent = t("addToMyListModal");
   } else {
-    modalTitle.textContent = "Adicionar Filmes";
+    modalTitle.textContent = t("addMovies");
   }
 
   document.getElementById("modal-add").style.display = "flex";
@@ -1003,7 +999,7 @@ async function searchTMDB() {
 
   const resultsDiv = document.getElementById("search-results");
   resultsDiv.innerHTML =
-    '<p style="padding:10px;color:var(--text-muted)">Buscando...</p>';
+    `<p style="padding:10px;color:var(--text-muted)">${t("searchingMovies")}</p>`;
 
   try {
     const data = await api("search", { query });
@@ -1011,7 +1007,7 @@ async function searchTMDB() {
 
     if (searchResults.length === 0) {
       resultsDiv.innerHTML =
-        '<p style="padding:10px;color:var(--text-muted)">Nenhum resultado encontrado.</p>';
+        '<p style="padding:10px;color:var(--text-muted)">${t("noResults")}</p>';
       return;
     }
 
@@ -1094,9 +1090,9 @@ function renderSelectedMovies() {
   count.textContent = selectedMovies.length;
 
   if (addTarget === "watchlist") {
-    btn.textContent = `Adicionar ${selectedMovies.length} à Minha Lista`;
+    btn.textContent = t("addNToList", selectedMovies.length);
   } else {
-    btn.textContent = `Adicionar ${selectedMovies.length} Filme${selectedMovies.length > 1 ? "s" : ""}`;
+    btn.textContent = t("addNMovies", selectedMovies.length);
   }
 
   list.innerHTML = selectedMovies
@@ -1109,7 +1105,7 @@ function renderSelectedMovies() {
           <span class="title">${escapeHtml(m.title)}</span>
           <span class="meta">${m.year || ""}${m.genre ? " · " + escapeHtml(m.genre) : ""}</span>
         </div>
-        <button class="btn-remove-selected" onclick="removeFromSelected(${i})" title="Remover">✕</button>
+        <button class="btn-remove-selected" onclick="removeFromSelected(${i})" title="${t("remove")}">✕</button>
       </div>
     `;
     })
@@ -1224,7 +1220,7 @@ async function submitMarkWatched() {
 }
 
 async function removeFromWatchlist(id) {
-  if (!confirm("Remover este filme da sua lista?")) return;
+  if (!confirm(t("confirmRemoveFromList"))) return;
   watchlist = watchlist.filter((w) => w.id !== id);
   render();
   await saveToServer();
@@ -1275,21 +1271,21 @@ function buildRatingHtml(movie) {
   let parts = [];
   if (movie.ratingJoint !== null && movie.ratingJoint !== undefined) {
     parts.push(
-      `<span class="detail-rating-item">Nota Conjunta: <strong>${formatRating(movie.ratingJoint)}</strong></span>`,
+      `<span class="detail-rating-item">${t("jointLabel")}: <strong>${formatRating(movie.ratingJoint)}</strong></span>`,
     );
   }
   if (movie.ratingHim !== null && movie.ratingHim !== undefined) {
     parts.push(
-      `<span class="detail-rating-item">${icon("user", 16)} Dele: <strong>${formatRating(movie.ratingHim)}</strong></span>`,
+      `<span class="detail-rating-item">${icon("user", 16)} ${t("hisLabel")}: <strong>${formatRating(movie.ratingHim)}</strong></span>`,
     );
   }
   if (movie.ratingHer !== null && movie.ratingHer !== undefined) {
     parts.push(
-      `<span class="detail-rating-item">${icon("heart", 16)} Dela: <strong>${formatRating(movie.ratingHer)}</strong></span>`,
+      `<span class="detail-rating-item">${icon("heart", 16)} ${t("herLabel")}: <strong>${formatRating(movie.ratingHer)}</strong></span>`,
     );
   }
   if (parts.length === 0) {
-    return '<div class="detail-no-rating">Sem nota ainda</div>';
+    return '<div class="detail-no-rating">${t("noRatingYet")}</div>';
   }
   return `<div class="detail-user-ratings">${parts.join("")}</div>`;
 }
@@ -1299,8 +1295,8 @@ function renderDetailActions(movie, opts) {
     const tmdbId = opts.tmdbId;
     return `
       <div class="detail-actions">
-        <button class="btn-primary" onclick="closeModal('modal-detail'); addRecommendationToWatchlist(${tmdbId})">+ Minha Lista</button>
-        <button class="btn-secondary" onclick="closeModal('modal-detail'); markRecommendationAsWatched(${tmdbId})">✓ Assistido</button>
+        <button class="btn-primary" onclick="closeModal('modal-detail'); addRecommendationToWatchlist(${tmdbId})">+ ${t("myListBtn")}</button>
+        <button class="btn-secondary" onclick="closeModal('modal-detail'); markRecommendationAsWatched(${tmdbId})">✓ ${t("watched")}</button>
       </div>
     `;
   }
@@ -1308,14 +1304,14 @@ function renderDetailActions(movie, opts) {
     const watchlistId = opts.watchlistId;
     return `
       <div class="detail-actions">
-        <button class="btn-primary" onclick="closeModal('modal-detail'); openMarkWatchedModal('${watchlistId}')">✓ Assistido</button>
-        <button class="btn-secondary" onclick="closeModal('modal-detail'); removeFromWatchlist('${watchlistId}')">Remover</button>
+        <button class="btn-primary" onclick="closeModal('modal-detail'); openMarkWatchedModal('${watchlistId}')">✓ ${t("watched")}</button>
+        <button class="btn-secondary" onclick="closeModal('modal-detail'); removeFromWatchlist('${watchlistId}')">${t("removeBtn")}</button>
       </div>
     `;
   }
   return `
     <div class="detail-actions">
-      <button class="btn-primary" onclick="closeModal('modal-detail'); openEditModal('${movie.id}')">Editar Notas</button>
+      <button class="btn-primary" onclick="closeModal('modal-detail'); openEditModal('${movie.id}')">${t("editNotes")}</button>
     </div>
   `;
 }
@@ -1333,8 +1329,8 @@ function renderDetailBasic(movie, opts) {
         ${buildRatingHtml(movie)}
       </div>
     </div>
-    ${movie.overview ? `<div class="detail-section"><h3>Sinopse</h3><p>${escapeHtml(movie.overview)}</p></div>` : ""}
-    ${movie.tmdbId ? '<div class="detail-loading">Carregando detalhes...</div>' : ""}
+    ${movie.overview ? `<div class="detail-section"><h3>${t("synopsis")}</h3><p>${escapeHtml(movie.overview)}</p></div>` : ""}
+    ${movie.tmdbId ? '<div class="detail-loading">${t("loadingDetails")}</div>' : ""}
     ${renderDetailActions(movie, opts)}
   `;
 }
@@ -1367,15 +1363,15 @@ function renderDetailFull(movie, details, opts) {
         <div class="detail-meta">
           ${details.year ? `<span>${details.year}</span>` : ""}
           ${details.runtime ? `<span>${details.runtime} min</span>` : ""}
-          ${details.director ? `<span>Dir: ${escapeHtml(details.director)}</span>` : ""}
+          ${details.director ? `<span>${t("direction")}: ${escapeHtml(details.director)}</span>` : ""}
         </div>
         ${details.genres ? `<div class="detail-genres">${escapeHtml(details.genres)}</div>` : ""}
         ${details.voteAverage ? `<div class="detail-tmdb-score">TMDB: <strong>${details.voteAverage.toFixed(1)}</strong></div>` : ""}
         ${buildRatingHtml(movie)}
       </div>
     </div>
-    ${details.overview ? `<div class="detail-section"><h3>Sinopse</h3><p>${escapeHtml(details.overview)}</p></div>` : ""}
-    ${castHtml ? `<div class="detail-section"><h3>Elenco</h3><div class="detail-cast-grid">${castHtml}</div></div>` : ""}
+    ${details.overview ? `<div class="detail-section"><h3>${t("synopsis")}</h3><p>${escapeHtml(details.overview)}</p></div>` : ""}
+    ${castHtml ? `<div class="detail-section"><h3>${t("cast")}</h3><div class="detail-cast-grid">${castHtml}</div></div>` : ""}
     ${renderDetailActions(movie, opts)}
   `;
 }
@@ -1484,7 +1480,7 @@ document.getElementById("form-edit").addEventListener("submit", async (e) => {
 // Delete
 document.getElementById("btn-delete").addEventListener("click", async () => {
   const id = document.getElementById("edit-id").value;
-  if (!confirm("Tem certeza que deseja excluir este filme?")) return;
+  if (!confirm(t("confirmDelete"))) return;
   movies = movies.filter((m) => m.id !== id);
   closeModal("modal-edit");
   render();
@@ -1521,68 +1517,19 @@ function showEmptyState({ kicker, title, description, actionLabel, action }) {
 function getTabEmptyState() {
   switch (currentTab) {
     case "ranking":
-      return {
-        kicker: "Ranking vazio",
-        title: "Ainda não existe ranking por aqui",
-        description:
-          "Adicionem os filmes que vocês já assistiram e preencham as notas para começar o ranking do casal.",
-        actionLabel: "Adicionar filmes assistidos",
-        action: "openAddModal('movies')",
-      };
+      return { ...t("emptyRanking"), action: "openAddModal('movies')" };
     case "ele":
       return movies.length === 0
-        ? {
-            kicker: "Sem filmes",
-            title: "Ainda não há filmes para o ranking dele",
-            description:
-              "Adicionem os filmes que vocês já assistiram e depois registrem as notas dele para liberar esta visão.",
-            actionLabel: "Adicionar filmes assistidos",
-            action: "openAddModal('movies')",
-          }
-        : {
-            kicker: "Notas pendentes",
-            title: "Ainda faltam as notas dele",
-            description:
-              "Editem os filmes já assistidos e preencham as notas dele para montar esse ranking.",
-            actionLabel: "Adicionar notas",
-            action: `openEditModal('${movies[0]?.id || ""}')`,
-          };
+        ? { ...t("emptyHisNoMovies"), action: "openAddModal('movies')" }
+        : { ...t("emptyHisPending"), action: `openEditModal('${movies[0]?.id || ""}')` };
     case "ela":
       return movies.length === 0
-        ? {
-            kicker: "Sem filmes",
-            title: "Ainda não há filmes para o ranking dela",
-            description:
-              "Adicionem os filmes que vocês já assistiram e depois registrem as notas dela para liberar esta visão.",
-            actionLabel: "Adicionar filmes assistidos",
-            action: "openAddModal('movies')",
-          }
-        : {
-            kicker: "Notas pendentes",
-            title: "Ainda faltam as notas dela",
-            description:
-              "Editem os filmes já assistidos e preencham as notas dela para montar esse ranking.",
-            actionLabel: "Adicionar notas",
-            action: `openEditModal('${movies[0]?.id || ""}')`,
-          };
+        ? { ...t("emptyHersNoMovies"), action: "openAddModal('movies')" }
+        : { ...t("emptyHersPending"), action: `openEditModal('${movies[0]?.id || ""}')` };
     case "todos":
-      return {
-        kicker: "Biblioteca vazia",
-        title: "Nenhum filme assistido foi adicionado",
-        description:
-          "Adicionem os filmes que vocês já viram e aproveitem para registrar as notas de cada sessão.",
-        actionLabel: "Adicionar filmes assistidos",
-        action: "openAddModal('movies')",
-      };
+      return { ...t("emptyAll"), action: "openAddModal('movies')" };
     default:
-      return {
-        kicker: "Comecem por aqui",
-        title: "O ranking ainda está em branco",
-        description:
-          "Adicionem os filmes assistidos ou montem a watchlist para a experiência ficar completa.",
-        actionLabel: "Adicionar primeiro filme",
-        action: "openAddModal('watchlist')",
-      };
+      return { ...t("emptyDefault"), action: "openAddModal('watchlist')" };
   }
 }
 
@@ -1609,7 +1556,7 @@ function render() {
   let sorted = [...movies];
   let showRank = true;
   let ratingFn = getEffectiveRating;
-  let rankingLabel = `${icon("trophy")} Ranking`;
+  let rankingLabel = `${icon("trophy")} ${t("ranking")}`;
 
   switch (currentTab) {
     case "inicio":
@@ -1617,26 +1564,26 @@ function render() {
       sorted.sort(
         (a, b) => (getEffectiveRating(b) ?? -1) - (getEffectiveRating(a) ?? -1),
       );
-      rankingLabel = `${icon("trophy")} Ranking Geral`;
+      rankingLabel = `${icon("trophy")} ${t("rankingGeneral")}`;
       break;
     case "ele":
       sorted = sorted.filter((m) => getHisRating(m) !== null);
       sorted.sort((a, b) => getHisRating(b) - getHisRating(a));
       ratingFn = getHisRating;
-      rankingLabel = `${icon("user")} Ranking Dele`;
+      rankingLabel = `${icon("user")} ${t("rankingHis")}`;
       break;
     case "ela":
       sorted = sorted.filter((m) => getHerRating(m) !== null);
       sorted.sort((a, b) => getHerRating(b) - getHerRating(a));
       ratingFn = getHerRating;
-      rankingLabel = `${icon("heart")} Ranking Dela`;
+      rankingLabel = `${icon("heart")} ${t("rankingHers")}`;
       break;
     case "todos":
       sorted.sort((a, b) =>
         (b.dateAdded || "").localeCompare(a.dateAdded || ""),
       );
       showRank = false;
-      rankingLabel = `${icon("film")} Todos os Filmes`;
+      rankingLabel = `${icon("film")} ${t("allMovies")}`;
       break;
   }
 
@@ -1653,7 +1600,7 @@ function render() {
   } else {
     rankingSection.style.display = isRanking || isTodos ? "block" : "none";
     rankingSlider.style.display = sorted.length > 0 ? "block" : "none";
-    rankingCount.textContent = `${sorted.length} filme${sorted.length !== 1 ? "s" : ""}`;
+    rankingCount.textContent = t("nMovies", sorted.length);
 
     if ((currentTab === "ele" || currentTab === "ela") && sorted.length === 0) {
       rankingSection.style.display = "none";
@@ -1684,7 +1631,7 @@ function render() {
 
       const detailParts = [];
       if (movie.ratingJoint !== null && movie.ratingJoint !== undefined) {
-        detailParts.push(`Conjunta: ${formatRating(movie.ratingJoint)}`);
+        detailParts.push(`${t("joint")}: ${formatRating(movie.ratingJoint)}`);
       }
       if (movie.ratingHim !== null && movie.ratingHim !== undefined) {
         detailParts.push(
@@ -1700,14 +1647,14 @@ function render() {
       return `
       <div class="movie-card" onclick="openEditModal('${movie.id}')">
         ${rankBadge}
-        <button class="btn-info" onclick="event.stopPropagation(); openDetailModal('${movie.id}')" title="Detalhes do filme">${icon("info", 16)}</button>
+        <button class="btn-info" onclick="event.stopPropagation(); openDetailModal('${movie.id}')" title="${t("movieDetails")}">${icon("info", 16)}</button>
         <div class="poster-container">${posterHtml}</div>
         <div class="card-info">
           <div class="card-title" title="${escapeHtml(movie.title)}">${escapeHtml(movie.title)}</div>
           ${movie.year ? `<div class="card-year">${movie.year}</div>` : ""}
           ${movie.genre ? `<div class="card-genre">${escapeHtml(movie.genre)}</div>` : ""}
           <div class="card-rating">
-            <span class="rating-badge ${ratingClass}">${rating !== null && rating !== undefined ? rating.toFixed(1) : "Sem nota"}</span>
+            <span class="rating-badge ${ratingClass}">${rating !== null && rating !== undefined ? rating.toFixed(1) : t("noRating")}</span>
             ${
               detailParts.length > 0
                 ? `<span class="card-rating-details">${detailParts.join(" &middot; ")}</span>`
@@ -1741,7 +1688,7 @@ function renderWatchlist() {
 
   emptyEl.style.display = "none";
   content.style.display = "block";
-  countEl.textContent = `${watchlist.length} filme${watchlist.length > 1 ? "s" : ""}`;
+  countEl.textContent = t("nMovies", watchlist.length);
 
   track.innerHTML = watchlist
     .map((item) => {
@@ -1751,15 +1698,15 @@ function renderWatchlist() {
 
       return `
       <div class="watchlist-card">
-        <button class="btn-info" onclick="event.stopPropagation(); openWatchlistDetail('${item.id}')" title="Detalhes do filme">${icon("info", 16)}</button>
+        <button class="btn-info" onclick="event.stopPropagation(); openWatchlistDetail('${item.id}')" title="${t("movieDetails")}">${icon("info", 16)}</button>
         <div class="poster-container">${posterHtml}</div>
         <div class="card-info">
           <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
           ${item.year ? `<div class="card-year">${item.year}</div>` : ""}
           ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ""}
           <div class="watchlist-actions">
-            <button class="btn-watched" onclick="openMarkWatchedModal('${item.id}')" title="Marcar como assistido">${icon("check", 14)} Assistido</button>
-            <button class="btn-remove-wl" onclick="removeFromWatchlist('${item.id}')" title="Remover">${icon("x", 14)}</button>
+            <button class="btn-watched" onclick="openMarkWatchedModal('${item.id}')" title="${t("markAsWatched")}">${icon("check", 14)} ${t("watched")}</button>
+            <button class="btn-remove-wl" onclick="removeFromWatchlist('${item.id}')" title="${t("remove")}">${icon("x", 14)}</button>
           </div>
         </div>
       </div>`;
@@ -1792,24 +1739,24 @@ function renderStats() {
 
   statsBar.innerHTML = `
     <div class="stat-card">
-      <span class="stat-label">${icon("clapperboard", 16)} Biblioteca</span>
+      <span class="stat-label">${icon("clapperboard", 16)} ${t("library")}</span>
       <strong>${total}</strong>
-      <span class="stat-foot">filme${total > 1 ? "s" : ""} já entrou${total > 1 ? "ram" : "u"} no ranking</span>
+      <span class="stat-foot">${t("moviesInRanking", total)}</span>
     </div>
     <div class="stat-card">
-      <span class="stat-label">${icon("star", 16)} Média</span>
+      <span class="stat-label">${icon("star", 16)} ${t("average")}</span>
       <strong>${rated.length > 0 ? avgAll.toFixed(1) : "--"}</strong>
-      <span class="stat-foot">nota consolidada do histórico do casal</span>
+      <span class="stat-foot">${t("consolidatedAvg")}</span>
     </div>
     <div class="stat-card">
-      <span class="stat-label">${icon("bookmark", 16)} Watchlist</span>
+      <span class="stat-label">${icon("bookmark", 16)} ${t("watchlistLabel")}</span>
       <strong>${watchlist.length}</strong>
-      <span class="stat-foot">filme${watchlist.length === 1 ? "" : "s"} esperando a próxima sessão</span>
+      <span class="stat-foot">${t("awaitingSession", watchlist.length)}</span>
     </div>
     <div class="stat-card">
-      <span class="stat-label">${icon("trophy", 16)} Top atual</span>
+      <span class="stat-label">${icon("trophy", 16)} ${t("currentTop")}</span>
       <strong>${best ? getEffectiveRating(best).toFixed(1) : "--"}</strong>
-      <span class="stat-foot">${best ? escapeHtml(best.title) : "Adicionem notas para destacar um favorito"}</span>
+      <span class="stat-foot">${best ? escapeHtml(best.title) : t("addNotesToHighlight")}</span>
     </div>
   `;
   refreshIcons();
@@ -1828,45 +1775,23 @@ function renderPendingRatingsBanner() {
     .slice(0, 3)
     .map((m) => `<strong>${escapeHtml(m.title)}</strong>`);
   let text = names.join(", ");
-  if (unrated.length > 3) text += ` e mais ${unrated.length - 3}`;
+  if (unrated.length > 3) text += ` ${t("andMore", unrated.length - 3)}`;
 
   banner.innerHTML = `
     ${icon("alert-circle", 16)}
-    <span><strong>${unrated.length}</strong> filme${unrated.length > 1 ? "s" : ""} ainda precisa${unrated.length > 1 ? "m" : ""} de nota. Comecem por ${text}.</span>
-    <button class="btn-pending-rate" onclick="openEditModal('${unrated[0].id}')">Avaliar agora</button>
+    <span>${t("pendingBanner", unrated.length, text)}</span>
+    <button class="btn-pending-rate" onclick="openEditModal('${unrated[0].id}')">${t("rateNow")}</button>
   `;
   banner.style.display = "flex";
   refreshIcons();
 }
 
 function getGenreIdsFromItem(item) {
-  const genreNameToId = {
-    Ação: 28,
-    Aventura: 12,
-    Animação: 16,
-    Comédia: 35,
-    Crime: 80,
-    Documentário: 99,
-    Drama: 18,
-    Família: 10751,
-    Fantasia: 14,
-    História: 36,
-    Terror: 27,
-    Música: 10402,
-    Mistério: 9648,
-    Romance: 10749,
-    "Ficção Científica": 878,
-    Telefilme: 10770,
-    Suspense: 53,
-    Guerra: 10752,
-    Faroeste: 37,
-  };
-
   if (!item.genre) return [];
   return item.genre
     .split(",")
     .map((g) => g.trim())
-    .map((g) => genreNameToId[g])
+    .map((g) => GENRE_NAME_TO_ID[g])
     .filter(Boolean);
 }
 
@@ -1885,16 +1810,16 @@ function renderRecommendations() {
 
   if (recommendationType === "personalized") {
     const signalCount = buildRecommendationSignals().length;
-    typeEl.textContent = `Baseado em ${signalCount} sinais do perfil`;
+    typeEl.textContent = t("basedOnSignals", signalCount);
     hintEl.style.display = "none";
   } else {
-    typeEl.textContent = "Em alta esta semana";
+    typeEl.textContent = t("trendingThisWeek");
     const signalCount = buildRecommendationSignals().length;
     if (signalCount < 3) {
       const remaining = 3 - signalCount;
-      hintEl.innerHTML = `${icon("info", 14)} Adicionem mais <strong>${remaining}</strong> filme${remaining > 1 ? "s" : ""} avaliado${remaining > 1 ? "s" : ""} ou salvo na watchlist para personalizar melhor.`;
+      hintEl.innerHTML = `${icon("info", 14)} ${t("addMoreMovies", remaining)}`;
     } else {
-      hintEl.innerHTML = `${icon("sparkles", 14)} Não apareceu um conjunto forte de recomendações personalizadas com o histórico atual, então o app mostrou os destaques do momento.`;
+      hintEl.innerHTML = `${icon("sparkles", 14)} ${t("noStrongRecs")}`;
     }
     hintEl.style.display = "inline-flex";
   }
@@ -1910,7 +1835,7 @@ function renderRecommendations() {
 
       return `
       <div class="watchlist-card recommendation-card">
-        <button class="btn-info" onclick="event.stopPropagation(); openRecommendationDetail(${item.tmdbId})" title="Detalhes do filme">${icon("info", 16)}</button>
+        <button class="btn-info" onclick="event.stopPropagation(); openRecommendationDetail(${item.tmdbId})" title="${t("movieDetails")}">${icon("info", 16)}</button>
         <div class="poster-container">${posterHtml}</div>
         <div class="card-info">
           <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
@@ -1920,9 +1845,9 @@ function renderRecommendations() {
           <div class="watchlist-actions rec-actions">
             ${
               alreadyInList
-                ? '<button class="btn-watched" disabled style="opacity:.55;">Já adicionado</button>'
-                : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="Adicionar à minha lista">${icon("plus", 14)} Lista</button>
-                   <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="Marcar como assistido">${icon("check", 14)} Assistido</button>`
+                ? '<button class="btn-watched" disabled style="opacity:.55;">${t("alreadyAdded")}</button>'
+                : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="${t("addToMyListModal")}">${icon("plus", 14)} ${t("addToMyList")}</button>
+                   <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="${t("markAsWatched")}">${icon("check", 14)} ${t("watched")}</button>`
             }
           </div>
         </div>
@@ -1944,7 +1869,7 @@ function openAddModal(target) {
 
   const modalTitle = document.querySelector("#modal-add .modal-header h2");
   modalTitle.textContent =
-    addTarget === "watchlist" ? "Adicionar à minha lista" : "Adicionar filmes";
+    addTarget === "watchlist" ? t("addToMyListModal") : t("addMovies");
 
   document.getElementById("modal-add").style.display = "flex";
 }
@@ -1954,7 +1879,7 @@ async function searchTMDB() {
   if (!query) return;
 
   const resultsDiv = document.getElementById("search-results");
-  resultsDiv.innerHTML = '<p class="inline-feedback">Buscando filmes...</p>';
+  resultsDiv.innerHTML = '<p class="inline-feedback">${t("searchingMovies")}</p>';
 
   try {
     const data = await api("search", { query });
@@ -1962,7 +1887,7 @@ async function searchTMDB() {
 
     if (searchResults.length === 0) {
       resultsDiv.innerHTML =
-        '<p class="inline-feedback">Nenhum resultado encontrado.</p>';
+        '<p class="inline-feedback">${t("noResults")}</p>';
       return;
     }
 
@@ -2012,8 +1937,8 @@ function renderSelectedMovies() {
   count.textContent = selectedMovies.length;
   btn.textContent =
     addTarget === "watchlist"
-      ? `Adicionar ${selectedMovies.length} à minha lista`
-      : `Adicionar ${selectedMovies.length} filme${selectedMovies.length > 1 ? "s" : ""}`;
+      ? t("addNToList", selectedMovies.length)
+      : t("addNMovies", selectedMovies.length);
 
   list.innerHTML = selectedMovies
     .map((m, i) => {
@@ -2025,7 +1950,7 @@ function renderSelectedMovies() {
           <span class="title">${escapeHtml(m.title)}</span>
           <span class="meta">${m.year || ""}${m.genre ? " &middot; " + escapeHtml(m.genre) : ""}</span>
         </div>
-        <button class="btn-remove-selected" onclick="removeFromSelected(${i})" title="Remover">${icon("x", 14)}</button>
+        <button class="btn-remove-selected" onclick="removeFromSelected(${i})" title="${t("remove")}">${icon("x", 14)}</button>
       </div>`;
     })
     .join("");
@@ -2036,8 +1961,8 @@ function renderDetailActions(movie, opts) {
   if (opts && opts.isRecommendation) {
     return `
       <div class="detail-actions">
-        <button class="btn-primary" onclick="closeModal('modal-detail'); addRecommendationToWatchlist(${opts.tmdbId})">${icon("plus", 14)} Minha lista</button>
-        <button class="btn-secondary" onclick="closeModal('modal-detail'); markRecommendationAsWatched(${opts.tmdbId})">${icon("check", 14)} Assistido</button>
+        <button class="btn-primary" onclick="closeModal('modal-detail'); addRecommendationToWatchlist(${opts.tmdbId})">${icon("plus", 14)} ${t("myListBtn")}</button>
+        <button class="btn-secondary" onclick="closeModal('modal-detail'); markRecommendationAsWatched(${opts.tmdbId})">${icon("check", 14)} ${t("watched")}</button>
       </div>
     `;
   }
@@ -2045,15 +1970,15 @@ function renderDetailActions(movie, opts) {
   if (opts && opts.isWatchlist) {
     return `
       <div class="detail-actions">
-        <button class="btn-primary" onclick="closeModal('modal-detail'); openMarkWatchedModal('${opts.watchlistId}')">${icon("check", 14)} Assistido</button>
-        <button class="btn-secondary" onclick="closeModal('modal-detail'); removeFromWatchlist('${opts.watchlistId}')">${icon("trash-2", 14)} Remover</button>
+        <button class="btn-primary" onclick="closeModal('modal-detail'); openMarkWatchedModal('${opts.watchlistId}')">${icon("check", 14)} ${t("watched")}</button>
+        <button class="btn-secondary" onclick="closeModal('modal-detail'); removeFromWatchlist('${opts.watchlistId}')">${icon("trash-2", 14)} ${t("removeBtn")}</button>
       </div>
     `;
   }
 
   return `
     <div class="detail-actions">
-      <button class="btn-primary" onclick="closeModal('modal-detail'); openEditModal('${movie.id}')">${icon("pencil", 14)} Editar notas</button>
+      <button class="btn-primary" onclick="closeModal('modal-detail'); openEditModal('${movie.id}')">${icon("pencil", 14)} ${t("editNotes")}</button>
     </div>
   `;
 }
@@ -2085,19 +2010,20 @@ function renderDetailFull(movie, details, opts) {
         <div class="detail-meta">
           ${details.year ? `<span>${details.year}</span>` : ""}
           ${details.runtime ? `<span>${details.runtime} min</span>` : ""}
-          ${details.director ? `<span>Direção: ${escapeHtml(details.director)}</span>` : ""}
+          ${details.director ? `<span>${t("direction")}: ${escapeHtml(details.director)}</span>` : ""}
         </div>
         ${details.genres ? `<div class="detail-genres">${escapeHtml(details.genres)}</div>` : ""}
         ${details.voteAverage ? `<div class="detail-tmdb-score">TMDB: <strong>${details.voteAverage.toFixed(1)}</strong></div>` : ""}
         ${buildRatingHtml(movie)}
       </div>
     </div>
-    ${details.overview ? `<div class="detail-section"><h3>Sinopse</h3><p>${escapeHtml(details.overview)}</p></div>` : ""}
-    ${castHtml ? `<div class="detail-section"><h3>Elenco</h3><div class="detail-cast-grid">${castHtml}</div></div>` : ""}
+    ${details.overview ? `<div class="detail-section"><h3>${t("synopsis")}</h3><p>${escapeHtml(details.overview)}</p></div>` : ""}
+    ${castHtml ? `<div class="detail-section"><h3>${t("cast")}</h3><div class="detail-cast-grid">${castHtml}</div></div>` : ""}
     ${renderDetailActions(movie, opts)}
   `;
 }
 
 // ========== Init ==========
+applyI18n();
 refreshIcons();
 tryAutoLogin();

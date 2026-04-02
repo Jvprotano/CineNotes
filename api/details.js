@@ -2,17 +2,19 @@ module.exports = async (req, res) => {
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' });
 
-    const { tmdbId } = req.body || {};
-    if (!tmdbId) return res.status(400).json({ error: 'tmdbId é obrigatório' });
+    const { tmdbId, lang } = req.body || {};
+    if (!tmdbId) return res.status(400).json({ error: 'tmdbId is required' });
 
     const apiKey = process.env.TMDB_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'TMDB_API_KEY não configurada no servidor.' });
+      return res.status(500).json({ error: 'TMDB_API_KEY not configured.' });
     }
 
+    const tmdbLang = lang === 'en' ? 'en-US' : 'pt-BR';
+
     const [detailsRes, creditsRes] = await Promise.all([
-      fetch(`https://api.themoviedb.org/3/movie/${encodeURIComponent(tmdbId)}?api_key=${apiKey}&language=pt-BR`),
-      fetch(`https://api.themoviedb.org/3/movie/${encodeURIComponent(tmdbId)}/credits?api_key=${apiKey}&language=pt-BR`),
+      fetch(`https://api.themoviedb.org/3/movie/${encodeURIComponent(tmdbId)}?api_key=${apiKey}&language=${tmdbLang}`),
+      fetch(`https://api.themoviedb.org/3/movie/${encodeURIComponent(tmdbId)}/credits?api_key=${apiKey}&language=${tmdbLang}`),
     ]);
 
     const details = await detailsRes.json();

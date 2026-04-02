@@ -1,27 +1,21 @@
-const GENRE_MAP = {
-  28: 'A\u00e7\u00e3o',
-  12: 'Aventura',
-  16: 'Anima\u00e7\u00e3o',
-  35: 'Com\u00e9dia',
-  80: 'Crime',
-  99: 'Document\u00e1rio',
-  18: 'Drama',
-  10751: 'Fam\u00edlia',
-  14: 'Fantasia',
-  36: 'Hist\u00f3ria',
-  27: 'Terror',
-  10402: 'M\u00fasica',
-  9648: 'Mist\u00e9rio',
-  10749: 'Romance',
-  878: 'Fic\u00e7\u00e3o Cient\u00edfica',
-  10770: 'Telefilme',
-  53: 'Suspense',
-  10752: 'Guerra',
-  37: 'Faroeste',
+const GENRE_MAP_PT = {
+  28: 'Ação', 12: 'Aventura', 16: 'Animação', 35: 'Comédia',
+  80: 'Crime', 99: 'Documentário', 18: 'Drama', 10751: 'Família',
+  14: 'Fantasia', 36: 'História', 27: 'Terror', 10402: 'Música',
+  9648: 'Mistério', 10749: 'Romance', 878: 'Ficção Científica',
+  10770: 'Telefilme', 53: 'Suspense', 10752: 'Guerra', 37: 'Faroeste',
 };
+const GENRE_MAP_EN = {
+  28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy',
+  80: 'Crime', 99: 'Documentary', 18: 'Drama', 10751: 'Family',
+  14: 'Fantasy', 36: 'History', 27: 'Horror', 10402: 'Music',
+  9648: 'Mystery', 10749: 'Romance', 878: 'Science Fiction',
+  10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western',
+};
+let GENRE_MAP = GENRE_MAP_PT;
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
-const TMDB_LANGUAGE = 'pt-BR';
+let TMDB_LANGUAGE = 'pt-BR';
 const FETCH_TIMEOUT_MS = 1500;
 const MAX_RESULTS = 20;
 const CANDIDATE_SEED_LIMIT = 4;
@@ -540,6 +534,10 @@ module.exports = async (req, res) => {
     if (!apiKey) {
       return res.status(500).json({ error: 'TMDB_API_KEY nao configurada no servidor.' });
     }
+
+    const lang = (req.body || {}).lang;
+    TMDB_LANGUAGE = lang === 'en' ? 'en-US' : 'pt-BR';
+    GENRE_MAP = lang === 'en' ? GENRE_MAP_EN : GENRE_MAP_PT;
 
     const userData = getUserData(req.body || {});
     const userProfile = buildUserProfile(userData);
