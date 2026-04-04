@@ -254,6 +254,7 @@
     <div id="login-screen" class="login-screen">
       <div class="login-card">
         <div class="login-card-glow"></div>
+        <button id="btn-lang-login" class="btn-lang-login" onclick="setLanguage(userLang === 'pt-BR' ? 'en' : 'pt-BR')">EN</button>
         <div class="login-identity">
           <img src="assets/logo.png" alt="CineNotes" class="login-logo" />
           <h1 class="login-title">
@@ -356,6 +357,7 @@
                   <i data-lucide="plus"></i>
                   <span data-i18n="btnAddMovie">Adicionar filme</span>
                 </button>
+                <button id="btn-lang-toggle" class="btn-icon btn-lang" onclick="setLanguage(userLang === 'pt-BR' ? 'en' : 'pt-BR')" title="Switch to English">EN</button>
                 <button id="btn-logout" class="btn-icon" data-i18n-title="btnLogoutTitle" title="Sair da sala">
                   <i data-lucide="log-out"></i>
                 </button>

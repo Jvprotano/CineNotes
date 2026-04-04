@@ -76,9 +76,6 @@ const translations = {
     alreadyAdded: "Já adicionado",
     addToMyList: "Lista",
     watched: "Assistido",
-    notInterested: "NÃ£o tenho interesse",
-    dismissRecommendationTitle: "Remover esta recomendaÃ§Ã£o",
-
     notInterested: "N\u00e3o tenho interesse",
     dismissRecommendationTitle: "Remover esta recomenda\u00e7\u00e3o",
 
@@ -455,10 +452,32 @@ const translations = {
 };
 
 // Detect language: Portuguese for pt-*, English for everything else
-const userLang = (() => {
+let userLang = (() => {
+  const saved = localStorage.getItem("cinenotes_lang");
+  if (saved === "pt-BR" || saved === "en") return saved;
   const nav = navigator.language || navigator.userLanguage || "en";
   return nav.startsWith("pt") ? "pt-BR" : "en";
 })();
+
+function setLanguage(lang) {
+  if (lang !== "pt-BR" && lang !== "en") return;
+  userLang = lang;
+  localStorage.setItem("cinenotes_lang", lang);
+  applyI18n();
+  const label = lang === "pt-BR" ? "EN" : "PT";
+  const title = lang === "pt-BR" ? "Switch to English" : "Mudar para Portugu\u00eas";
+  document.querySelectorAll("#btn-lang-toggle, #btn-lang-login").forEach(btn => {
+    btn.textContent = label;
+    btn.title = title;
+  });
+  // Re-render app content if logged in
+  if (typeof render === "function") {
+    try {
+      render();
+      if (typeof loadRecommendations === "function") loadRecommendations();
+    } catch (_) {}
+  }
+}
 
 function t(key, ...args) {
   // Support dot notation for nested keys (e.g. "emptyDefault.title")
@@ -490,6 +509,14 @@ function applyI18n() {
   // Update page title & html lang
   document.title = t("pageTitle");
   document.documentElement.lang = userLang === "pt-BR" ? "pt-BR" : "en";
+
+  // Sync language toggle buttons
+  const label = userLang === "pt-BR" ? "EN" : "PT";
+  const title = userLang === "pt-BR" ? "Switch to English" : "Mudar para Portugu\u00eas";
+  document.querySelectorAll("#btn-lang-toggle, #btn-lang-login").forEach(btn => {
+    btn.textContent = label;
+    btn.title = title;
+  });
 
   // SEO meta tags
   const metaMap = {

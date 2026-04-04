@@ -37,6 +37,7 @@ module.exports = async (req, res) => {
       movies: [],
       watchlist: [],
       dismissed: [],
+      dismissedWithGenres: [],
       tmdbKey: '',
       createdAt: new Date().toISOString(),
     };

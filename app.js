@@ -2,6 +2,7 @@
 let movies = [];
 let watchlist = [];
 let dismissed = [];
+let dismissedWithGenres = [];
 let recommendations = [];
 let recommendationType = "trending"; // 'personalized' or 'trending'
 let currentTab = "inicio";
@@ -129,7 +130,7 @@ function devApi(endpoint, body) {
       throw new Error(t("errPasswordLength"));
     if (devGetRoom(cleanCode))
       throw new Error(t("errCodeTaken"));
-    devSetRoom(cleanCode, { password, movies: [], watchlist: [], dismissed: [], tmdbKey: "" });
+    devSetRoom(cleanCode, { password, movies: [], watchlist: [], dismissed: [], dismissedWithGenres: [], tmdbKey: "" });
     return { ok: true };
   }
   if (endpoint === "load") {
@@ -144,6 +145,7 @@ function devApi(endpoint, body) {
       movies: room.movies || [],
       watchlist: room.watchlist || [],
       dismissed: room.dismissed || [],
+      dismissedWithGenres: room.dismissedWithGenres || [],
       tmdbKey: room.tmdbKey || "",
     };
   }
@@ -160,6 +162,8 @@ function devApi(endpoint, body) {
       body.watchlist !== undefined ? body.watchlist : room.watchlist || [];
     room.dismissed =
       body.dismissed !== undefined ? body.dismissed : room.dismissed || [];
+    room.dismissedWithGenres =
+      body.dismissedWithGenres !== undefined ? body.dismissedWithGenres : room.dismissedWithGenres || [];
     if (body.tmdbKey !== undefined) room.tmdbKey = body.tmdbKey;
     devSetRoom(cleanCode, room);
     return { ok: true };
@@ -205,6 +209,7 @@ async function saveToServer() {
       movies,
       watchlist,
       dismissed,
+      dismissedWithGenres,
     });
   } catch (err) {
     console.error("Erro ao salvar:", err);
@@ -372,6 +377,7 @@ document.getElementById("form-enter").addEventListener("submit", async (e) => {
     movies = data.movies || [];
     watchlist = data.watchlist || [];
     dismissed = data.dismissed || [];
+    dismissedWithGenres = data.dismissedWithGenres || [];
     trackEvent("room_entered", {
       method: "manual",
       movies_count: movies.length,
@@ -401,6 +407,7 @@ document.getElementById("form-create").addEventListener("submit", async (e) => {
     movies = [];
     watchlist = [];
     dismissed = [];
+    dismissedWithGenres = [];
     recommendations = [];
     trackEvent("room_created", {
       method: "manual",
@@ -436,6 +443,7 @@ async function tryAutoLogin() {
     movies = data.movies || [];
     watchlist = data.watchlist || [];
     dismissed = data.dismissed || [];
+    dismissedWithGenres = data.dismissedWithGenres || [];
     trackEvent("room_entered", {
       method: "session_restore",
       movies_count: movies.length,
@@ -780,6 +788,7 @@ function buildRecommendationSignals() {
       signalType: "rating",
       title: m.title || "",
       year: m.year || "",
+      dateAdded: m.dateAdded || "",
     }));
 
   const ratedIds = new Set(ratedSignals.map((m) => m.tmdbId));
@@ -787,14 +796,33 @@ function buildRecommendationSignals() {
     .filter((w) => w.tmdbId && !ratedIds.has(w.tmdbId))
     .map((w) => ({
       tmdbId: w.tmdbId,
-      rating: 7.5,
+      rating: 6.5,
       genreIds: getGenreIdsFromItem(w),
       signalType: "watchlist",
       title: w.title || "",
       year: w.year || "",
+      dateAdded: w.dateAdded || "",
     }));
 
   return [...ratedSignals, ...watchlistSignals];
+}
+
+function computeMedianYear() {
+  const years = movies
+    .filter((m) => m.year)
+    .map((m) => parseInt(m.year))
+    .filter((y) => y > 1900)
+    .sort((a, b) => a - b);
+  if (!years.length) return null;
+  const mid = Math.floor(years.length / 2);
+  return years.length % 2 ? years[mid] : Math.round((years[mid - 1] + years[mid]) / 2);
+}
+
+function buildDismissedWithGenres() {
+  // dismissed is an array of tmdbIds — we need to look up their genres
+  // from recommendations that were previously displayed
+  // We store genre info at dismiss time now
+  return (dismissedWithGenres || []).slice(-50);
 }
 
 function getDislikedGenreIds() {
@@ -862,10 +890,19 @@ async function loadRecommendations() {
     const body = { excludeTmdbIds };
     if (seeds.length > 0) body.seeds = seeds;
     if (dislikedGenreIds.length > 0) body.dislikedGenreIds = dislikedGenreIds;
+    const dg = buildDismissedWithGenres();
+    if (dg.length > 0) body.dismissedWithGenres = dg;
+    const medianYear = computeMedianYear();
+    if (medianYear) body.medianYear = medianYear;
 
     const data = await api("recommendations", body);
     recommendations = data.results || [];
     recommendationType = data.type || "trending";
+    trackEvent("recommendations_loaded", {
+      recommendation_type: recommendationType,
+      results_count: recommendations.length,
+      signal_count: seeds.length,
+    });
     renderRecommendations();
   } catch (err) {
     console.error("Erro ao carregar recomendações:", err);
@@ -924,7 +961,7 @@ function renderRecommendations() {
           <div class="watchlist-actions rec-actions">
             ${
               alreadyInList
-                ? '<button class="btn-watched" disabled style="opacity:0.5;">${t("alreadyAdded")}</button>'
+                ? `<button class="btn-watched" disabled style="opacity:0.5;">${t("alreadyAdded")}</button>`
                 : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="${t("addToMyListModal")}">${t("addToMyList")}</button>
                  <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="${t("markAsWatched")}">✓ ${t("watched")}</button>`
             }
@@ -1061,6 +1098,8 @@ async function addRecommendationToWatchlist(tmdbId) {
   recommendations = recommendations.filter((r) => r.tmdbId !== tmdbId);
   trackEvent("recommendation_added_to_watchlist", {
     recommendation_type: recommendationType,
+    total_shown: recommendations.length + 1,
+    genre: item.genre || "",
   });
   render();
   await saveToServer();
@@ -1074,13 +1113,24 @@ function clearDismissedTmdbId(tmdbId) {
 async function dismissRecommendation(tmdbId) {
   if (!tmdbId) return;
 
+  const item = recommendations.find((r) => r.tmdbId === tmdbId);
   if (!dismissed.includes(tmdbId)) {
     dismissed.push(tmdbId);
+  }
+
+  // Store genre info for dismissed items to build negative signals
+  if (item) {
+    const genreIds = getGenreIdsFromItem(item);
+    if (genreIds.length) {
+      dismissedWithGenres.push({ tmdbId, genreIds, dismissedAt: new Date().toISOString().slice(0, 10) });
+    }
   }
 
   recommendations = recommendations.filter((r) => r.tmdbId !== tmdbId);
   trackEvent("recommendation_dismissed", {
     recommendation_type: recommendationType,
+    total_shown: recommendations.length + 1,
+    genre: item ? item.genre || "" : "",
   });
   render();
   await saveToServer();
@@ -1165,7 +1215,7 @@ async function searchTMDB() {
 
     if (searchResults.length === 0) {
       resultsDiv.innerHTML =
-        '<p style="padding:10px;color:var(--text-muted)">${t("noResults")}</p>';
+        `<p style="padding:10px;color:var(--text-muted)">${t("noResults")}</p>`;
       return;
     }
 
@@ -1460,7 +1510,7 @@ function buildRatingHtml(movie) {
     );
   }
   if (parts.length === 0) {
-    return '<div class="detail-no-rating">${t("noRatingYet")}</div>';
+    return `<div class="detail-no-rating">${t("noRatingYet")}</div>`;
   }
   return `<div class="detail-user-ratings">${parts.join("")}</div>`;
 }
@@ -1505,7 +1555,7 @@ function renderDetailBasic(movie, opts) {
       </div>
     </div>
     ${movie.overview ? `<div class="detail-section"><h3>${t("synopsis")}</h3><p>${escapeHtml(movie.overview)}</p></div>` : ""}
-    ${movie.tmdbId ? '<div class="detail-loading">${t("loadingDetails")}</div>' : ""}
+    ${movie.tmdbId ? `<div class="detail-loading">${t("loadingDetails")}</div>` : ""}
     ${renderDetailActions(movie, opts)}
   `;
 }
@@ -2071,7 +2121,7 @@ async function searchTMDB() {
   if (!query) return;
 
   const resultsDiv = document.getElementById("search-results");
-  resultsDiv.innerHTML = '<p class="inline-feedback">${t("searchingMovies")}</p>';
+  resultsDiv.innerHTML = `<p class="inline-feedback">${t("searchingMovies")}</p>`;
 
   try {
     const data = await api("search", { query });
@@ -2084,7 +2134,7 @@ async function searchTMDB() {
 
     if (searchResults.length === 0) {
       resultsDiv.innerHTML =
-        '<p class="inline-feedback">${t("noResults")}</p>';
+        `<p class="inline-feedback">${t("noResults")}</p>`;
       return;
     }
 

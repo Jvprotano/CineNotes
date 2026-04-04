@@ -32,6 +32,7 @@ module.exports = async (req, res) => {
       movies: data.movies || [],
       watchlist: data.watchlist || [],
       dismissed: data.dismissed || [],
+      dismissedWithGenres: data.dismissedWithGenres || [],
       tmdbKey: data.tmdbKey || '',
     });
   } catch (err) {

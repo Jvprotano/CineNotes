@@ -16,13 +16,14 @@ let GENRE_MAP = GENRE_MAP_PT;
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 let TMDB_LANGUAGE = 'pt-BR';
-const FETCH_TIMEOUT_MS = 1500;
+const FETCH_TIMEOUT_MS = 2500;
 const MAX_RESULTS = 20;
 const CANDIDATE_SEED_LIMIT = 4;
 const DISCOVER_GENRE_LIMIT = 2;
-const WATCHLIST_EQUIVALENT_RATING = 7.5;
+const WATCHLIST_EQUIVALENT_RATING = 6.5;
 const DEFAULT_MEAN_RATING = 6.5;
 const EXPLORATION_RATIO = 0.2;
+const KEYWORD_CACHE = new Map();
 
 const SOURCE_WEIGHTS = Object.freeze({
   recommendations: 1,
@@ -33,11 +34,13 @@ const SOURCE_WEIGHTS = Object.freeze({
 
 // Similarity drives rank, while TMDB quality signals refine tie-breaking.
 const SCORE_WEIGHTS = Object.freeze({
-  weightedSimilarity: 0.46,
-  frequency: 0.18,
-  tmdbVoteAverage: 0.16,
-  popularity: 0.1,
-  recency: 0.1,
+  weightedSimilarity: 0.30,
+  keywordSimilarity: 0.14,
+  crewAffinity: 0.10,
+  frequency: 0.14,
+  tmdbVoteAverage: 0.14,
+  popularity: 0.08,
+  recency: 0.10,
 });
 
 function clamp(value, min, max) {
@@ -63,14 +66,18 @@ function getYear(releaseDate) {
   return releaseDate ? String(releaseDate).slice(0, 4) : '';
 }
 
-function recencyScore(releaseDate) {
+function recencyScore(releaseDate, medianYear) {
   if (!releaseDate) return 0.2;
   const releaseYear = safeNumber(String(releaseDate).slice(0, 4), null);
   if (!releaseYear) return 0.2;
 
   const currentYear = new Date().getUTCFullYear();
+  // Adaptive window: if user watches older films, expand the window
+  const recencyWindow = medianYear
+    ? Math.max(25, currentYear - medianYear + 15)
+    : 25;
   const age = Math.max(0, currentYear - releaseYear);
-  return clamp(1 - age / 25, 0, 1);
+  return clamp(1 - age / recencyWindow, 0, 1);
 }
 
 function uniqueGenreIds(genreIds) {
@@ -130,6 +137,70 @@ async function fetchTmdbList(apiKey, path, query, metadata) {
   }
 }
 
+async function fetchKeywords(apiKey, tmdbId) {
+  if (KEYWORD_CACHE.has(tmdbId)) return KEYWORD_CACHE.get(tmdbId);
+  try {
+    const url = buildTmdbUrl(apiKey, `/movie/${encodeURIComponent(tmdbId)}/keywords`, {});
+    const data = await fetchJson(url);
+    const ids = (data.keywords || []).map(k => k.id).filter(Boolean);
+    KEYWORD_CACHE.set(tmdbId, ids);
+    return ids;
+  } catch {
+    KEYWORD_CACHE.set(tmdbId, []);
+    return [];
+  }
+}
+
+async function fetchCredits(apiKey, tmdbId) {
+  try {
+    const url = buildTmdbUrl(apiKey, `/movie/${encodeURIComponent(tmdbId)}/credits`, {});
+    const data = await fetchJson(url);
+    const directors = (data.crew || [])
+      .filter(c => c.job === 'Director')
+      .map(c => c.id);
+    const topCast = (data.cast || [])
+      .slice(0, 5)
+      .map(c => c.id);
+    return { directors, topCast };
+  } catch {
+    return { directors: [], topCast: [] };
+  }
+}
+
+async function enrichSeedsWithMetadata(apiKey, seeds) {
+  const enriched = await Promise.all(
+    seeds.map(async seed => {
+      const [keywords, credits] = await Promise.all([
+        fetchKeywords(apiKey, seed.tmdbId),
+        fetchCredits(apiKey, seed.tmdbId),
+      ]);
+      return { ...seed, keywordIds: keywords, ...credits };
+    })
+  );
+  return enriched;
+}
+
+async function enrichCandidatesWithKeywords(apiKey, candidates) {
+  const batchSize = 10;
+  for (let i = 0; i < candidates.length; i += batchSize) {
+    const batch = candidates.slice(i, i + batchSize);
+    await Promise.all(
+      batch.map(async candidate => {
+        candidate.keywordIds = await fetchKeywords(apiKey, candidate.movie.id);
+      })
+    );
+  }
+  return candidates;
+}
+
+function keywordJaccard(leftKeywords, rightKeywords) {
+  if (!leftKeywords.length || !rightKeywords.length) return 0;
+  const rightSet = new Set(rightKeywords);
+  const intersection = leftKeywords.filter(id => rightSet.has(id)).length;
+  const union = new Set([...leftKeywords, ...rightKeywords]).size;
+  return union > 0 ? intersection / union : 0;
+}
+
 function jaccardSimilarity(leftGenres, rightGenres) {
   const left = uniqueGenreIds(leftGenres);
   const right = uniqueGenreIds(rightGenres);
@@ -164,12 +235,35 @@ function getUserData(body = {}) {
             genreIds: uniqueGenreIds(seed.genreIds),
             title: seed.title || '',
             year: seed.year || '',
+            dateAdded: seed.dateAdded || '',
           };
         })
         .filter(Boolean)
     : [];
 
-  return { signals, exclude, dislikedGenreIds };
+  const dismissedGenres = new Map();
+  if (Array.isArray(body.dismissedWithGenres)) {
+    body.dismissedWithGenres.forEach(d => {
+      const genres = Array.isArray(d.genreIds) ? d.genreIds : [];
+      genres.forEach(gid => {
+        const id = safeNumber(gid, null);
+        if (id) dismissedGenres.set(id, (dismissedGenres.get(id) || 0) + 1);
+      });
+    });
+  }
+
+  const medianYear = safeNumber(body.medianYear, null);
+
+  return { signals, exclude, dislikedGenreIds, dismissedGenres, medianYear };
+}
+
+function timeDecay(dateAdded) {
+  if (!dateAdded) return 1;
+  const addedMs = new Date(dateAdded).getTime();
+  if (Number.isNaN(addedMs)) return 1;
+  const daysSince = Math.max(0, (Date.now() - addedMs) / (1000 * 60 * 60 * 24));
+  // Exponential decay, half-life ~180 days, floor at 0.3
+  return 0.3 + 0.7 * Math.exp(-daysSince / 180);
 }
 
 function buildUserProfile(userData) {
@@ -184,19 +278,20 @@ function buildUserProfile(userData) {
   const normalizedSignals = userData.signals.map(signal => {
     const weightBase = signal.rating - meanRating;
     const boostedWeight = signal.signalType === 'watchlist'
-      ? Math.max(0.9, weightBase + 0.9)
+      ? Math.max(0.5, weightBase + 0.5)
       : weightBase;
+
+    const decay = timeDecay(signal.dateAdded);
 
     const normalizedSignal = {
       ...signal,
-      weight: Math.round(boostedWeight * 1000) / 1000,
+      weight: Math.round(boostedWeight * decay * 1000) / 1000,
     };
 
     signalById.set(signal.tmdbId, normalizedSignal);
 
     normalizedSignal.genreIds.forEach(genreId => {
-      const genreBoost = normalizedSignal.signalType === 'watchlist' ? 1.15 : 1;
-      genreWeights.set(genreId, (genreWeights.get(genreId) || 0) + normalizedSignal.weight * genreBoost);
+      genreWeights.set(genreId, (genreWeights.get(genreId) || 0) + normalizedSignal.weight);
     });
 
     return normalizedSignal;
@@ -208,14 +303,22 @@ function buildUserProfile(userData) {
     .map(([genreId]) => genreId)
     .slice(0, 3);
 
+  // Dynamic seed limit: scales with catalog size
+  const dynamicSeedLimit = Math.min(8, Math.max(CANDIDATE_SEED_LIMIT, Math.ceil(normalizedSignals.length * 0.15)));
+
   const relevantSeeds = normalizedSignals
     .filter(signal => signal.signalType === 'watchlist' || signal.weight > 0)
     .sort((a, b) => {
-      const aStrength = (a.signalType === 'watchlist' ? 1.25 : 1) * (Math.abs(a.weight) + 0.25);
-      const bStrength = (b.signalType === 'watchlist' ? 1.25 : 1) * (Math.abs(b.weight) + 0.25);
+      const aStrength = (a.signalType === 'watchlist' ? 1.0 : 1) * (Math.abs(a.weight) + 0.25);
+      const bStrength = (b.signalType === 'watchlist' ? 1.0 : 1) * (Math.abs(b.weight) + 0.25);
       return bStrength - aStrength;
     })
-    .slice(0, CANDIDATE_SEED_LIMIT);
+    .slice(0, dynamicSeedLimit);
+
+  // Build keyword profile and crew profile from enriched seeds (populated later)
+  const keywordWeights = new Map();
+  const directorWeights = new Map();
+  const castWeights = new Map();
 
   return {
     hasSignals: normalizedSignals.length > 0,
@@ -227,7 +330,28 @@ function buildUserProfile(userData) {
     dominantGenresSet: new Set(dominantGenres),
     topGenres: dominantGenres.slice(0, DISCOVER_GENRE_LIMIT),
     relevantSeeds,
+    keywordWeights,
+    directorWeights,
+    castWeights,
+    medianYear: userData.medianYear,
   };
+}
+
+function populateUserMetadataProfile(userProfile, enrichedSeeds) {
+  enrichedSeeds.forEach(seed => {
+    const signal = userProfile.signalById.get(seed.tmdbId);
+    const weight = signal ? Math.max(signal.weight, 0.1) : 0.5;
+
+    (seed.keywordIds || []).forEach(kwId => {
+      userProfile.keywordWeights.set(kwId, (userProfile.keywordWeights.get(kwId) || 0) + weight);
+    });
+    (seed.directors || []).forEach(dId => {
+      userProfile.directorWeights.set(dId, (userProfile.directorWeights.get(dId) || 0) + weight * 1.5);
+    });
+    (seed.topCast || []).forEach(cId => {
+      userProfile.castWeights.set(cId, (userProfile.castWeights.get(cId) || 0) + weight * 0.8);
+    });
+  });
 }
 
 async function fetchCandidates(apiKey, userProfile) {
@@ -342,7 +466,7 @@ function computeWeightedSimilarity(candidate, userProfile) {
     const similarity = jaccardSimilarity(candidateGenres, signal.genreIds);
     if (similarity <= 0) return;
 
-    const minimumWeight = signal.signalType === 'watchlist' ? 0.9 : 0;
+    const minimumWeight = signal.signalType === 'watchlist' ? 0.5 : 0;
     const signedWeight = signal.weight >= 0
       ? Math.max(signal.weight, minimumWeight)
       : signal.weight;
@@ -363,7 +487,51 @@ function computeWeightedSimilarity(candidate, userProfile) {
   return clamp((rawSimilarity + 1) / 2 + sourceAffinity, 0, 1);
 }
 
-function computeScores(candidates, userProfile, dislikedGenreIds) {
+function computeKeywordSimilarity(candidate, userProfile) {
+  const candidateKeywords = candidate.keywordIds || [];
+  if (!candidateKeywords.length || !userProfile.keywordWeights.size) return 0.5;
+
+  const userKeywordIds = [...userProfile.keywordWeights.keys()];
+  const rawJaccard = keywordJaccard(candidateKeywords, userKeywordIds);
+
+  // Weighted overlap: keywords that appear in highly-rated seeds score higher
+  let weightedOverlap = 0;
+  let maxPossibleWeight = 0;
+  candidateKeywords.forEach(kwId => {
+    const userWeight = userProfile.keywordWeights.get(kwId);
+    if (userWeight) weightedOverlap += userWeight;
+    maxPossibleWeight += Math.max(userWeight || 0, 0.5);
+  });
+  const normalizedWeightedOverlap = maxPossibleWeight > 0
+    ? weightedOverlap / maxPossibleWeight
+    : 0;
+
+  // Blend raw Jaccard with weighted overlap
+  return clamp(0.4 * rawJaccard + 0.6 * normalizedWeightedOverlap, 0, 1);
+}
+
+function computeCrewAffinity(candidate, userProfile) {
+  if (!userProfile.directorWeights.size && !userProfile.castWeights.size) return 0;
+
+  const candidateCredits = candidate.credits || { directors: [], topCast: [] };
+  let affinity = 0;
+
+  // Director match is a strong signal
+  candidateCredits.directors.forEach(dId => {
+    const w = userProfile.directorWeights.get(dId);
+    if (w) affinity += Math.min(w / 3, 0.5);
+  });
+
+  // Cast match is a moderate signal
+  candidateCredits.topCast.forEach(cId => {
+    const w = userProfile.castWeights.get(cId);
+    if (w) affinity += Math.min(w / 5, 0.15);
+  });
+
+  return clamp(affinity, 0, 1);
+}
+
+function computeScores(candidates, userProfile, dislikedGenreIds, dismissedGenres) {
   if (!candidates.length) return [];
 
   const maxFrequency = Math.max(...candidates.map(candidate => candidate.frequency), 1);
@@ -372,21 +540,36 @@ function computeScores(candidates, userProfile, dislikedGenreIds) {
   return candidates
     .map(candidate => {
       const weightedSimilarity = computeWeightedSimilarity(candidate, userProfile);
+      const keywordSim = computeKeywordSimilarity(candidate, userProfile);
+      const crewAffinity = computeCrewAffinity(candidate, userProfile);
       const frequency = candidate.frequency / maxFrequency;
       const tmdbVoteAverage = clamp((safeNumber(candidate.movie.vote_average, 0) || 0) / 10, 0, 1);
       const popularity = normalizeLog(safeNumber(candidate.movie.popularity, 0), maxPopularity);
-      const recency = recencyScore(candidate.movie.release_date);
+      const recency = recencyScore(candidate.movie.release_date, userProfile.medianYear);
 
       let score =
         SCORE_WEIGHTS.weightedSimilarity * weightedSimilarity +
+        SCORE_WEIGHTS.keywordSimilarity * keywordSim +
+        SCORE_WEIGHTS.crewAffinity * crewAffinity +
         SCORE_WEIGHTS.frequency * frequency +
         SCORE_WEIGHTS.tmdbVoteAverage * tmdbVoteAverage +
         SCORE_WEIGHTS.popularity * popularity +
         SCORE_WEIGHTS.recency * recency;
 
+      // Penalize disliked genres
       const dislikedCount = candidate.genreIds.filter(genreId => dislikedGenreIds.has(genreId)).length;
       if (dislikedCount > 0) {
         score *= Math.pow(0.7, dislikedCount);
+      }
+
+      // Penalize genres frequently dismissed (softer penalty)
+      if (dismissedGenres && dismissedGenres.size > 0) {
+        candidate.genreIds.forEach(genreId => {
+          const dismissCount = dismissedGenres.get(genreId) || 0;
+          if (dismissCount >= 3) {
+            score *= 0.9;
+          }
+        });
       }
 
       const dominantOverlap = candidate.genreIds.some(genreId => userProfile.dominantGenresSet.has(genreId));
@@ -403,6 +586,8 @@ function computeScores(candidates, userProfile, dislikedGenreIds) {
         dominantOverlap,
         metrics: {
           weightedSimilarity,
+          keywordSimilarity: keywordSim,
+          crewAffinity,
           frequency,
           tmdbVoteAverage,
           popularity,
@@ -543,9 +728,28 @@ module.exports = async (req, res) => {
     const userProfile = buildUserProfile(userData);
 
     if (userProfile.hasSignals) {
+      // Enrich seeds with keywords and credits metadata
+      const enrichedSeeds = await enrichSeedsWithMetadata(apiKey, userProfile.relevantSeeds);
+      populateUserMetadataProfile(userProfile, enrichedSeeds);
+
       const rawCandidates = await fetchCandidates(apiKey, userProfile);
       const mergedCandidates = mergeAndDeduplicate(rawCandidates, userData.exclude);
-      const scoredCandidates = computeScores(mergedCandidates, userProfile, userData.dislikedGenreIds);
+
+      // Enrich top candidates with keywords and credits (limit to top 60 by frequency to stay fast)
+      const topCandidates = mergedCandidates
+        .sort((a, b) => b.frequency - a.frequency || b.sourceWeight - a.sourceWeight)
+        .slice(0, 60);
+      await enrichCandidatesWithKeywords(apiKey, topCandidates);
+
+      // Fetch credits for top 30 candidates (directors + cast)
+      const creditsPool = topCandidates.slice(0, 30);
+      await Promise.all(
+        creditsPool.map(async candidate => {
+          candidate.credits = await fetchCredits(apiKey, candidate.movie.id);
+        })
+      );
+
+      const scoredCandidates = computeScores(topCandidates, userProfile, userData.dislikedGenreIds, userData.dismissedGenres);
       const explorationPool = applyExploration(scoredCandidates, userProfile);
       const rerankedCandidates = rerankWithDiversity(explorationPool);
       const results = returnTopResults(rerankedCandidates);
