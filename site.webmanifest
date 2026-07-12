@@ -6,9 +6,17 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#07111f",
-  "theme_color": "#07111f",
+  "background_color": "#0b0e14",
+  "theme_color": "#0b0e14",
   "categories": ["entertainment", "lifestyle", "social"],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=app.vercel.cinenotes",
+      "id": "app.vercel.cinenotes"
+    }
+  ],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/android-chrome-192x192.png",

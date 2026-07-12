@@ -1,244 +1,96 @@
+/* ============================================================
+   CineNotes 2.0 — application logic
+   Data model (unchanged from v1, fully compatible with existing rooms):
+     movie:     { id, tmdbId, title, year, poster, posterThumb?, genre,
+                  overview?, ratingJoint, ratingHim, ratingHer, dateAdded }
+     watchlist: { id, tmdbId, title, year, poster, genre, overview?, dateAdded }
+     dismissed: [tmdbId], dismissedWithGenres: [{ tmdbId, genreIds }]
+   ============================================================ */
+
 // ========== State ==========
 let movies = [];
 let watchlist = [];
 let dismissed = [];
 let dismissedWithGenres = [];
 let recommendations = [];
-let recommendationType = "trending"; // 'personalized' or 'trending'
-let currentTab = "inicio";
-let selectedMovies = [];
-let searchResults = [];
-let addTarget = "movies"; // 'movies' or 'watchlist'
-let session = JSON.parse(sessionStorage.getItem("cinenotes_session") || "null");
+let recommendationType = "trending";
+let recsLoaded = false;
 
-// ========== DOM ==========
-const loginScreen = document.getElementById("login-screen");
-const app = document.getElementById("app");
-const grid = document.getElementById("movie-grid");
-const emptyState = document.getElementById("empty-state");
-const statsBar = document.getElementById("stats-bar");
-const savingIndicator = document.getElementById("saving-indicator");
+let session = null;
+let currentView = "home";
+let librarySeg = "couple";
+let librarySearch = "";
+let tonightPick = null; // watchlist item id
+let saveTimer = null;
+let dirty = false;
 
-// ========== Dev Mode (localStorage fallback) ==========
+const detailsCache = new Map(); // `${tmdbId}:${lang}` -> details
+
 const DEV_MODE =
   location.hostname === "localhost" || location.hostname === "127.0.0.1";
 
-const analyticsState = {
-  lastViewKey: null,
-};
-
-function isAnalyticsEnabled() {
-  return !DEV_MODE && typeof window !== "undefined" && typeof window.gtag === "function";
+// ========== Utilities ==========
+function $(id) {
+  return document.getElementById(id);
 }
 
-function getAnalyticsLanguage() {
-  if (typeof userLang === "string" && userLang) return userLang;
-  return document.documentElement.lang || "pt-BR";
+function icon(name, size) {
+  const style = size ? ` style="width:${size}px;height:${size}px"` : "";
+  return `<svg class="icon"${style}><use href="#i-${name}"/></svg>`;
 }
 
-function trackEvent(name, params = {}) {
-  if (!isAnalyticsEnabled()) return;
-  window.gtag("event", name, {
-    app_name: "CineNotes",
-    language: getAnalyticsLanguage(),
-    ...params,
-  });
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-function getCurrentView() {
-  if (!session || app.style.display !== "block") {
-    const authMode =
-      document.querySelector(".login-tab.active")?.dataset.ltab === "create"
-        ? "create"
-        : "enter";
-
-    return authMode === "create"
-      ? {
-          key: "auth_create",
-          title: "Criar Sala",
-          path: "/auth/create",
-        }
-      : {
-          key: "auth_enter",
-          title: "Entrar",
-          path: "/auth/enter",
-        };
-  }
-
-  const viewMap = {
-    inicio: {
-      title: "Inicio",
-      path: "/app/inicio",
-    },
-    ranking: {
-      title: "Ranking Geral",
-      path: "/app/ranking",
-    },
-    ele: {
-      title: "Ranking Dele",
-      path: "/app/ele",
-    },
-    ela: {
-      title: "Ranking Dela",
-      path: "/app/ela",
-    },
-    todos: {
-      title: "Todos os Filmes",
-      path: "/app/todos",
-    },
-  };
-
-  const view = viewMap[currentTab] || viewMap.inicio;
-  return {
-    key: `app_${currentTab}`,
-    title: view.title,
-    path: view.path,
-  };
-}
-
-function trackCurrentView(force = false) {
-  const view = getCurrentView();
-  if (!view) return;
-  if (!force && analyticsState.lastViewKey === view.key) return;
-
-  analyticsState.lastViewKey = view.key;
-  trackEvent("page_view", {
-    page_title: `CineNotes | ${view.title}`,
-    page_path: view.path,
-    page_location: `${location.origin}${view.path}`,
-  });
-}
-
-function devGetRoom(code) {
-  return JSON.parse(localStorage.getItem(`cinenotes_room_${code}`) || "null");
-}
-
-function devSetRoom(code, data) {
-  localStorage.setItem(`cinenotes_room_${code}`, JSON.stringify(data));
-}
-
-function devApi(endpoint, body) {
-  const { code, password } = body || {};
-  if (endpoint === "create") {
-    const cleanCode = code
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9-_]/g, "");
-    if (cleanCode.length < 3 || cleanCode.length > 30)
-      throw new Error(t("errCodeLength"));
-    if (!password || password.length < 4)
-      throw new Error(t("errPasswordLength"));
-    if (devGetRoom(cleanCode))
-      throw new Error(t("errCodeTaken"));
-    devSetRoom(cleanCode, { password, movies: [], watchlist: [], dismissed: [], dismissedWithGenres: [], tmdbKey: "" });
-    return { ok: true };
-  }
-  if (endpoint === "load") {
-    const cleanCode = code
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9-_]/g, "");
-    const room = devGetRoom(cleanCode);
-    if (!room) throw new Error(t("errRoomNotFound"));
-    if (room.password !== password) throw new Error(t("errWrongPassword"));
-    return {
-      movies: room.movies || [],
-      watchlist: room.watchlist || [],
-      dismissed: room.dismissed || [],
-      dismissedWithGenres: room.dismissedWithGenres || [],
-      tmdbKey: room.tmdbKey || "",
-    };
-  }
-  if (endpoint === "save") {
-    const cleanCode = code
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9-_]/g, "");
-    const room = devGetRoom(cleanCode);
-    if (!room) throw new Error(t("errRoomNotFound"));
-    if (room.password !== password) throw new Error(t("errWrongPassword"));
-    room.movies = body.movies || room.movies;
-    room.watchlist =
-      body.watchlist !== undefined ? body.watchlist : room.watchlist || [];
-    room.dismissed =
-      body.dismissed !== undefined ? body.dismissed : room.dismissed || [];
-    room.dismissedWithGenres =
-      body.dismissedWithGenres !== undefined ? body.dismissedWithGenres : room.dismissedWithGenres || [];
-    if (body.tmdbKey !== undefined) room.tmdbKey = body.tmdbKey;
-    devSetRoom(cleanCode, room);
-    return { ok: true };
-  }
-  return null; // not handled — fall through to server
-}
-
-// ========== API Helpers ==========
-async function api(endpoint, body) {
-  // In dev mode, handle create/load/save locally
-  if (DEV_MODE && ["create", "load", "save"].includes(endpoint)) {
-    return devApi(endpoint, body);
-  }
-  // Inject language for TMDB-facing endpoints
-  const langBody = ["search", "details", "recommendations"].includes(endpoint)
-    ? { ...body, lang: userLang === "pt-BR" ? "pt-BR" : "en" }
-    : body;
-  const res = await fetch(`/api/${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(langBody),
-  });
-  const text = await res.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(
-      t("errServer"),
-    );
-  }
-  if (!res.ok) throw new Error(data.error || t("errUnknown"));
-  return data;
-}
-
-async function saveToServer() {
-  if (!session) return;
-  savingIndicator.style.display = "block";
-  try {
-    await api("save", {
-      code: session.code,
-      password: session.password,
-      movies,
-      watchlist,
-      dismissed,
-      dismissedWithGenres,
-    });
-  } catch (err) {
-    console.error("Erro ao salvar:", err);
-    alert(t("errSave", err.message));
-  } finally {
-    setTimeout(() => {
-      savingIndicator.style.display = "none";
-    }, 800);
-  }
-}
-
-// ========== Icons ==========
-function icon(name, size = 18) {
-  return `<i data-lucide="${name}" style="width:${size}px;height:${size}px;display:inline-block;vertical-align:middle;"></i>`;
-}
-
-function refreshIcons() {
-  if (typeof lucide !== "undefined") lucide.createIcons();
-}
-
-// ========== Utility ==========
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatRating(val) {
+  return val !== null && val !== undefined ? Number(val).toFixed(1) : "–";
+}
+
+function ratingClass(r) {
+  if (r === null || r === undefined) return "none";
+  if (r >= 8) return "great";
+  if (r >= 6.5) return "good";
+  if (r >= 5) return "mid";
+  return "bad";
+}
+
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+function formatDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso + (iso.length === 10 ? "T12:00:00" : ""));
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(userLang === "en" ? "en-US" : "pt-BR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+// ========== Rating helpers ==========
 function getEffectiveRating(movie) {
-  if (movie.ratingJoint !== null && movie.ratingJoint !== undefined) {
+  if (movie.ratingJoint !== null && movie.ratingJoint !== undefined)
     return movie.ratingJoint;
-  }
   const ratings = [];
   if (movie.ratingHim !== null && movie.ratingHim !== undefined)
     ratings.push(movie.ratingHim);
@@ -264,463 +116,1322 @@ function getHerRating(movie) {
   return null;
 }
 
-function getRatingClass(rating) {
-  if (rating === null || rating === undefined) return "none";
-  if (rating >= 7) return "high";
-  if (rating >= 4) return "mid";
-  return "low";
+// ========== Analytics ==========
+function isAnalyticsEnabled() {
+  return !DEV_MODE && typeof window.gtag === "function";
 }
 
-function formatRating(val) {
-  return val !== null && val !== undefined ? val.toFixed(1) : "—";
-}
-
-function escapeHtml(str) {
-  if (!str) return "";
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-// ========== Slider ==========
-function scrollSlider(trackId, direction) {
-  const track = document.getElementById(trackId);
-  if (!track) return;
-  const scrollAmount = track.clientWidth * 0.75;
-  track.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
-}
-
-function updateSliderArrows(trackId) {
-  const track = document.getElementById(trackId);
-  if (!track) return;
-  const container = track.closest(".slider-container");
-  if (!container) return;
-  const leftArrow = container.querySelector(".slider-arrow-left");
-  const rightArrow = container.querySelector(".slider-arrow-right");
-
-  if (leftArrow) {
-    leftArrow.style.display = track.scrollLeft > 10 ? "flex" : "none";
-  }
-  if (rightArrow) {
-    const atEnd =
-      track.scrollLeft + track.clientWidth >= track.scrollWidth - 10;
-    rightArrow.style.display = atEnd ? "none" : "flex";
-  }
-}
-
-function initSlider(trackId) {
-  const track = document.getElementById(trackId);
-  if (!track) return;
-  track.addEventListener("scroll", () => updateSliderArrows(trackId));
-}
-
-window.addEventListener("resize", () => {
-  updateSliderArrows("watchlist-track");
-  updateSliderArrows("movie-grid");
-  updateSliderArrows("recommendations-track");
-});
-
-// ========== Login / Auth ==========
-document.querySelectorAll(".login-tab").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    document
-      .querySelectorAll(".login-tab")
-      .forEach((t) => t.classList.remove("active"));
-    tab.classList.add("active");
-    const isCreate = tab.dataset.ltab === "create";
-    document.getElementById("form-enter").style.display = isCreate
-      ? "none"
-      : "flex";
-    document.getElementById("form-create").style.display = isCreate
-      ? "flex"
-      : "none";
-    hideMessages();
-    trackEvent("login_mode_selected", {
-      mode: isCreate ? "create" : "enter",
-    });
-    trackCurrentView(true);
+function trackEvent(name, params = {}) {
+  if (!isAnalyticsEnabled()) return;
+  window.gtag("event", name, {
+    app_name: "CineNotes",
+    language: userLang,
+    ...params,
   });
+}
+
+function trackView(view) {
+  trackEvent("page_view", {
+    page_title: `CineNotes | ${view}`,
+    page_path: `/app/${view}`,
+    page_location: `${location.origin}/app/${view}`,
+  });
+}
+
+// ========== Dev mode (localStorage + fixtures) ==========
+const DEV_FIXTURES = [
+  { tmdbId: 27205, title: "Inception", year: "2010", poster: "https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg", posterThumb: "https://image.tmdb.org/t/p/w92/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg", genre: "Ação, Ficção Científica, Aventura", overview: "Dom Cobb é um ladrão com a rara habilidade de roubar segredos do inconsciente durante o sono." },
+  { tmdbId: 155, title: "The Dark Knight", year: "2008", poster: "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg", posterThumb: "https://image.tmdb.org/t/p/w92/qJ2tW6WMUDux911r6m7haRef0WH.jpg", genre: "Drama, Ação, Crime", overview: "Batman enfrenta o Coringa, um criminoso que mergulha Gotham no caos." },
+  { tmdbId: 496243, title: "Parasita", year: "2019", poster: "https://image.tmdb.org/t/p/w500/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg", posterThumb: "https://image.tmdb.org/t/p/w92/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg", genre: "Comédia, Suspense, Drama", overview: "Toda a família de Ki-taek está desempregada, vivendo em um porão sujo e apertado." },
+  { tmdbId: 129, title: "A Viagem de Chihiro", year: "2001", poster: "https://image.tmdb.org/t/p/w500/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg", posterThumb: "https://image.tmdb.org/t/p/w92/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg", genre: "Animação, Família, Fantasia", overview: "Chihiro descobre um mundo secreto de deuses e monstros." },
+  { tmdbId: 680, title: "Pulp Fiction", year: "1994", poster: "https://image.tmdb.org/t/p/w500/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg", posterThumb: "https://image.tmdb.org/t/p/w92/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg", genre: "Suspense, Crime", overview: "Histórias entrelaçadas de crime em Los Angeles." },
+  { tmdbId: 313369, title: "La La Land", year: "2016", poster: "https://image.tmdb.org/t/p/w500/ylXCdC106IKiarftHkcacasaAcb.jpg", posterThumb: "https://image.tmdb.org/t/p/w92/ylXCdC106IKiarftHkcacasaAcb.jpg", genre: "Comédia, Drama, Romance, Música", overview: "Uma atriz e um pianista se apaixonam em Los Angeles." },
+  { tmdbId: 438631, title: "Duna", year: "2021", poster: "https://image.tmdb.org/t/p/w500/cDbNAY0KM84cxXhmj8f0dLWza3t.jpg", posterThumb: "https://image.tmdb.org/t/p/w92/cDbNAY0KM84cxXhmj8f0dLWza3t.jpg", genre: "Ficção Científica, Aventura", overview: "Paul Atreides viaja ao planeta mais perigoso do universo." },
+  { tmdbId: 19404, title: "Dilwale Dulhania Le Jayenge", year: "1995", poster: "https://image.tmdb.org/t/p/w500/lfRkUr7DYdHldAqi3PwdQGBRBPM.jpg", posterThumb: "https://image.tmdb.org/t/p/w92/lfRkUr7DYdHldAqi3PwdQGBRBPM.jpg", genre: "Comédia, Drama, Romance", overview: "Raj e Simran se conhecem em uma viagem pela Europa." },
+];
+
+function devGetRoom(code) {
+  return JSON.parse(localStorage.getItem(`cinenotes_room_${code}`) || "null");
+}
+
+function devSetRoom(code, data) {
+  localStorage.setItem(`cinenotes_room_${code}`, JSON.stringify(data));
+}
+
+function cleanRoomCode(code) {
+  return (code || "").toLowerCase().trim().replace(/[^a-z0-9-_]/g, "");
+}
+
+function devApi(endpoint, body) {
+  const { code, password } = body || {};
+  if (endpoint === "create") {
+    const clean = cleanRoomCode(code);
+    if (clean.length < 3 || clean.length > 30) throw new Error(t("errCodeLength"));
+    if (!password || password.length < 4) throw new Error(t("errPasswordLength"));
+    if (devGetRoom(clean)) throw new Error(t("errCodeTaken"));
+    devSetRoom(clean, { password, movies: [], watchlist: [], dismissed: [], dismissedWithGenres: [] });
+    return { ok: true };
+  }
+  if (endpoint === "load") {
+    const room = devGetRoom(cleanRoomCode(code));
+    if (!room) throw new Error(t("errRoomNotFound"));
+    if (room.password !== password) throw new Error(t("errWrongPassword"));
+    return {
+      movies: room.movies || [],
+      watchlist: room.watchlist || [],
+      dismissed: room.dismissed || [],
+      dismissedWithGenres: room.dismissedWithGenres || [],
+    };
+  }
+  if (endpoint === "save") {
+    const clean = cleanRoomCode(code);
+    const room = devGetRoom(clean);
+    if (!room) throw new Error(t("errRoomNotFound"));
+    if (room.password !== password) throw new Error(t("errWrongPassword"));
+    room.movies = body.movies || [];
+    room.watchlist = body.watchlist || [];
+    room.dismissed = body.dismissed || [];
+    room.dismissedWithGenres = body.dismissedWithGenres || [];
+    devSetRoom(clean, room);
+    return { ok: true };
+  }
+  if (endpoint === "search") {
+    const q = (body.query || "").toLowerCase();
+    return { results: DEV_FIXTURES.filter((f) => f.title.toLowerCase().includes(q)) };
+  }
+  if (endpoint === "details") {
+    const f = DEV_FIXTURES.find((x) => x.tmdbId === body.tmdbId);
+    return {
+      tmdbId: body.tmdbId,
+      title: f ? f.title : "Movie",
+      year: f ? f.year : "",
+      overview: f ? f.overview : "",
+      poster: f ? f.poster : "",
+      backdrop: f ? f.poster.replace("/w500/", "/w1280/") : "",
+      runtime: 128,
+      genres: f ? f.genre : "",
+      voteAverage: 8.2,
+      director: "Dev Director",
+      cast: [
+        { name: "Ator Um", character: "Papel 1", photo: "" },
+        { name: "Atriz Dois", character: "Papel 2", photo: "" },
+      ],
+    };
+  }
+  if (endpoint === "recommendations") {
+    const exclude = new Set(body.excludeTmdbIds || []);
+    const personalized = (body.seeds || []).length >= 3;
+    return {
+      results: DEV_FIXTURES.filter((f) => !exclude.has(f.tmdbId)).map((f) => ({
+        ...f,
+        basedOn: personalized ? (body.seeds[0].title || "") : "",
+      })),
+      type: personalized ? "personalized" : "trending",
+    };
+  }
+  throw new Error("Unknown endpoint " + endpoint);
+}
+
+// ========== API client ==========
+async function api(endpoint, body) {
+  if (DEV_MODE) return devApi(endpoint, body);
+
+  const langBody = ["search", "details", "recommendations"].includes(endpoint)
+    ? { ...body, lang: userLang === "pt-BR" ? "pt-BR" : "en" }
+    : body;
+
+  const res = await fetch(`/api/${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(langBody),
+  });
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(t("errServer"));
+  }
+  if (!res.ok) throw new Error(data.error || t("errUnknown"));
+  return data;
+}
+
+// ========== Persistence ==========
+function setSyncState(state) {
+  const dot = $("sync-dot");
+  dot.className = "sync-dot" + (state ? " " + state : "");
+}
+
+async function saveToServer() {
+  if (!session) return;
+  setSyncState("saving");
+  try {
+    await api("save", {
+      code: session.code,
+      password: session.password,
+      movies,
+      watchlist,
+      dismissed,
+      dismissedWithGenres,
+    });
+    dirty = false;
+    setSyncState("");
+  } catch (err) {
+    console.error("Save failed:", err);
+    setSyncState("error");
+    showToast(navigator.onLine === false ? t("errOffline") : t("errSaveFailed"), true);
+  }
+}
+
+function scheduleSave() {
+  dirty = true;
+  setSyncState("saving");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToServer, 700);
+}
+
+window.addEventListener("online", () => {
+  if (dirty) saveToServer();
 });
 
-function hideMessages() {
-  document.getElementById("login-error").style.display = "none";
-  document.getElementById("login-success").style.display = "none";
+// Persist and re-render after any data mutation.
+function commit() {
+  scheduleSave();
+  render();
 }
 
-function showError(msg) {
-  const el = document.getElementById("login-error");
+// ========== Session / auth ==========
+const SESSION_KEY = "cinenotes_session_v2";
+
+function loadStoredSession() {
+  const v2 = localStorage.getItem(SESSION_KEY);
+  if (v2) return JSON.parse(v2);
+  // Migrate a live v1 session if present
+  const v1 = sessionStorage.getItem("cinenotes_session");
+  if (v1) {
+    localStorage.setItem(SESSION_KEY, v1);
+    return JSON.parse(v1);
+  }
+  return null;
+}
+
+function storeSession(s) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem("cinenotes_session");
+}
+
+function showLoginMessage(msg, type) {
+  const el = $("login-message");
   el.textContent = msg;
+  el.className = "login-message " + type;
   el.style.display = "block";
-  document.getElementById("login-success").style.display = "none";
 }
 
-function showSuccess(msg) {
-  const el = document.getElementById("login-success");
-  el.textContent = msg;
-  el.style.display = "block";
-  document.getElementById("login-error").style.display = "none";
+function hideLoginMessage() {
+  $("login-message").style.display = "none";
 }
 
-// Enter room
-document.getElementById("form-enter").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  hideMessages();
-  const code = document.getElementById("enter-code").value.trim();
-  const password = document.getElementById("enter-pass").value;
+function setFormLoading(form, loading, label) {
+  const btn = form.querySelector("button[type=submit]");
+  btn.disabled = loading;
+  btn.textContent = label;
+}
 
-  try {
-    const data = await api("load", { code, password });
-    session = { code, password };
-    sessionStorage.setItem("cinenotes_session", JSON.stringify(session));
-    movies = data.movies || [];
-    watchlist = data.watchlist || [];
-    dismissed = data.dismissed || [];
-    dismissedWithGenres = data.dismissedWithGenres || [];
+async function doEnter(code, password, silent) {
+  const data = await api("load", { code: cleanRoomCode(code), password });
+  session = { code: cleanRoomCode(code), password };
+  storeSession(session);
+  movies = data.movies || [];
+  watchlist = data.watchlist || [];
+  dismissed = data.dismissed || [];
+  dismissedWithGenres = data.dismissedWithGenres || [];
+  if (!silent) {
     trackEvent("room_entered", {
-      method: "manual",
       movies_count: movies.length,
       watchlist_count: watchlist.length,
     });
-    enterApp();
-  } catch (err) {
-    showError(err.message);
   }
-});
-
-// Create room
-document.getElementById("form-create").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  hideMessages();
-  const code = document
-    .getElementById("create-code")
-    .value.trim()
-    .replace(/\s+/g, "-");
-  const password = document.getElementById("create-pass").value;
-
-  try {
-    await api("create", { code, password });
-    showSuccess(t("roomCreated"));
-    session = { code, password };
-    sessionStorage.setItem("cinenotes_session", JSON.stringify(session));
-    movies = [];
-    watchlist = [];
-    dismissed = [];
-    dismissedWithGenres = [];
-    recommendations = [];
-    trackEvent("room_created", {
-      method: "manual",
-    });
-    setTimeout(enterApp, 800);
-  } catch (err) {
-    showError(err.message);
-  }
-});
+  enterApp();
+}
 
 function enterApp() {
-  loginScreen.style.display = "none";
-  app.style.display = "block";
-  document.getElementById("room-name").textContent = session.code;
-  initSlider("watchlist-track");
-  initSlider("movie-grid");
-  initSlider("recommendations-track");
-  render();
+  $("login-screen").style.display = "none";
+  $("app").style.display = "flex";
+  $("settings-room").textContent = session.code;
+  tonightPick = null;
+  switchView("home");
   loadRecommendations();
 }
 
-// Auto-login if session exists
-async function tryAutoLogin() {
-  if (!session) {
-    trackCurrentView(true);
-    return;
-  }
-  try {
-    const data = await api("load", {
-      code: session.code,
-      password: session.password,
-    });
-    movies = data.movies || [];
-    watchlist = data.watchlist || [];
-    dismissed = data.dismissed || [];
-    dismissedWithGenres = data.dismissedWithGenres || [];
-    trackEvent("room_entered", {
-      method: "session_restore",
-      movies_count: movies.length,
-      watchlist_count: watchlist.length,
-    });
-    enterApp();
-  } catch {
-    session = null;
-    sessionStorage.removeItem("cinenotes_session");
-    trackCurrentView(true);
-  }
-}
-
-// Logout
-document.getElementById("btn-logout").addEventListener("click", () => {
+function logout() {
   trackEvent("logged_out");
   session = null;
-  sessionStorage.removeItem("cinenotes_session");
-  app.style.display = "none";
-  loginScreen.style.display = "flex";
-  document.getElementById("form-enter").reset();
-  document.getElementById("form-create").reset();
-  hideMessages();
-  trackCurrentView(true);
-});
+  clearSession();
+  movies = [];
+  watchlist = [];
+  dismissed = [];
+  dismissedWithGenres = [];
+  recommendations = [];
+  recsLoaded = false;
+  closeAllSheets();
+  $("app").style.display = "none";
+  $("login-screen").style.display = "flex";
+  $("form-enter").reset();
+  $("form-create").reset();
+  hideLoginMessage();
+}
 
-// ========== Render ==========
+// ========== Navigation ==========
+function switchView(view) {
+  currentView = view;
+  ["home", "library", "watchlist", "stats"].forEach((v) => {
+    $(`view-${v}`).style.display = v === view ? "block" : "none";
+  });
+  document.querySelectorAll(".nav-item").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.view === view);
+  });
+  render();
+  window.scrollTo({ top: 0 });
+  trackView(view);
+}
+
+// ========== Rendering ==========
 function render() {
-  const isHome = currentTab === "inicio";
-  const isRanking = ["inicio", "ranking", "ele", "ela"].includes(currentTab);
-  const isTodos = currentTab === "todos";
+  if (!session) return;
+  if (currentView === "home") renderHome();
+  else if (currentView === "library") renderLibrary();
+  else if (currentView === "watchlist") renderWatchlistView();
+  else if (currentView === "stats") renderStats();
+}
 
-  // Show/hide sections based on tab
-  const watchlistSection = document.getElementById("watchlist-section");
-  const recsSection = document.getElementById("recommendations-section");
-  const pendingBanner = document.getElementById("pending-ratings-banner");
+function posterImg(item, cls) {
+  return item.poster
+    ? `<img src="${escapeHtml(item.poster)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=\\'no-poster\\'>${icon("clapperboard").replace(/"/g, "&quot;")}</div>'">`
+    : `<div class="no-poster">${icon("clapperboard")}</div>`;
+}
 
-  if (isHome) {
-    renderWatchlist();
-    renderRecommendations();
-    watchlistSection.style.display = "block";
-    // recsSection visibility controlled by renderRecommendations
-  } else {
-    watchlistSection.style.display = "none";
-    recsSection.style.display = "none";
+function movieCard(movie, opts = {}) {
+  const rating = opts.ratingFn ? opts.ratingFn(movie) : getEffectiveRating(movie);
+  const chip =
+    rating !== null
+      ? `<span class="rating-chip ${ratingClass(rating)}">${rating.toFixed(1)}</span>`
+      : `<span class="rating-chip none">${t("unrated")}</span>`;
+  let rank = "";
+  if (opts.rank && rating !== null) {
+    const cls = opts.rank <= 3 ? ` top${opts.rank}` : "";
+    rank = `<span class="rank-badge${cls}">${opts.rank}</span>`;
+  }
+  return `
+    <button class="pcard" onclick="openMovieDetail('${movie.id}')">
+      <div class="pcard-poster">
+        ${posterImg(movie)}
+        ${chip}
+        ${rank}
+      </div>
+      <div class="pcard-info">
+        <div class="pcard-title">${escapeHtml(movie.title)}</div>
+        <div class="pcard-meta">${escapeHtml(movie.year || "")}</div>
+      </div>
+    </button>`;
+}
+
+function emptyState(iconName, title, desc, actionLabel, actionJs) {
+  return `
+    <div class="empty-state">
+      <div class="empty-icon">${icon(iconName)}</div>
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(desc)}</p>
+      ${actionLabel ? `<button class="btn btn-primary" onclick="${actionJs}">${escapeHtml(actionLabel)}</button>` : ""}
+    </div>`;
+}
+
+// ----- Home -----
+function renderHome() {
+  const h = new Date().getHours();
+  const greeting =
+    h < 12 ? t("greetingMorning") : h < 18 ? t("greetingAfternoon") : t("greetingEvening");
+  $("greeting-text").textContent = `${greeting} 🍿`;
+
+  renderPendingBanner();
+  renderTonight();
+
+  const rows = [];
+
+  // Watchlist row
+  if (watchlist.length > 0) {
+    const cards = watchlist
+      .slice()
+      .sort((a, b) => (b.dateAdded || "").localeCompare(a.dateAdded || ""))
+      .slice(0, 12)
+      .map(
+        (item) => `
+        <div class="pcard">
+          <button class="pcard-poster" style="width:100%;border:none;padding:0;cursor:pointer" onclick="openWatchlistDetail('${item.id}')">
+            ${posterImg(item)}
+          </button>
+          <div class="pcard-info">
+            <div class="pcard-title">${escapeHtml(item.title)}</div>
+            <div class="pcard-meta">${escapeHtml(item.year || "")}</div>
+          </div>
+          <div class="pcard-actions">
+            <button class="chip-btn primary" onclick="openMarkWatched('${item.id}')">${icon("check")} ${t("markWatched")}</button>
+          </div>
+        </div>`
+      )
+      .join("");
+    rows.push(`
+      <section class="row-section">
+        <div class="row-head">
+          ${icon("bookmark")}
+          <h2>${t("rowWatchlist")}</h2>
+          <button class="icon-btn" onclick="switchView('watchlist')" aria-label="${t("seeAll")}">${icon("chevron-right")}</button>
+        </div>
+        <div class="h-scroll">${cards}</div>
+      </section>`);
   }
 
-  let sorted = [...movies];
-  let showRank = true;
-  let ratingFn = getEffectiveRating;
-  let rankingLabel = `${icon("trophy")} ${t("ranking")}`;
+  // Recommendations row
+  rows.push(renderRecsRow());
 
-  switch (currentTab) {
-    case "inicio":
-    case "ranking":
-      sorted.sort(
-        (a, b) => (getEffectiveRating(b) ?? -1) - (getEffectiveRating(a) ?? -1),
-      );
-      ratingFn = getEffectiveRating;
-      rankingLabel = `${icon("trophy")} ${t("rankingGeneral")}`;
-      break;
-    case "ele":
-      sorted = sorted.filter((m) => getHisRating(m) !== null);
-      sorted.sort((a, b) => getHisRating(b) - getHisRating(a));
-      ratingFn = getHisRating;
-      rankingLabel = `${icon("user")} ${t("rankingHis")}`;
-      break;
-    case "ela":
-      sorted = sorted.filter((m) => getHerRating(m) !== null);
-      sorted.sort((a, b) => getHerRating(b) - getHerRating(a));
-      ratingFn = getHerRating;
-      rankingLabel = `${icon("heart")} ${t("rankingHers")}`;
-      break;
-    case "todos":
-      sorted.sort((a, b) =>
-        (b.dateAdded || "").localeCompare(a.dateAdded || ""),
-      );
-      showRank = false;
-      ratingFn = getEffectiveRating;
-      rankingLabel = `${icon("film")} ${t("allMovies")}`;
-      break;
+  // Top picks row
+  const top = movies
+    .filter((m) => getEffectiveRating(m) !== null)
+    .sort((a, b) => getEffectiveRating(b) - getEffectiveRating(a))
+    .slice(0, 10);
+  if (top.length >= 3) {
+    const cards = top.map((m, i) => movieCard(m, { rank: i + 1 })).join("");
+    rows.push(`
+      <section class="row-section">
+        <div class="row-head">
+          ${icon("trophy")}
+          <h2>${t("rowTop")}</h2>
+          <button class="icon-btn" onclick="switchView('library')" aria-label="${t("seeAll")}">${icon("chevron-right")}</button>
+        </div>
+        <div class="h-scroll">${cards}</div>
+      </section>`);
   }
 
-  const rankingSection = document.getElementById("ranking-section");
-  const rankingSlider = document.getElementById("ranking-slider");
-  const rankingTitle = document.getElementById("ranking-title");
-  const rankingCount = document.getElementById("ranking-count");
+  $("home-rows").innerHTML = rows.join("");
 
-  rankingTitle.innerHTML = rankingLabel;
+  $("home-empty").innerHTML =
+    movies.length === 0 && watchlist.length === 0
+      ? emptyState("clapperboard", t("emptyHomeTitle"), t("emptyHomeDesc"), t("emptyHomeAction"), "openAddSheet()")
+      : "";
+}
 
-  if (movies.length === 0) {
-    rankingSection.style.display = "none";
-    emptyState.style.display = isHome ? "block" : "none";
-  } else {
-    emptyState.style.display = "none";
-    rankingSection.style.display = isRanking || isTodos ? "block" : "none";
-    rankingSlider.style.display = sorted.length > 0 ? "block" : "none";
-    rankingCount.textContent = t("nMovies", sorted.length);
+function renderPendingBanner() {
+  const unrated = movies.filter((m) => getEffectiveRating(m) === null);
+  const el = $("pending-banner");
+  if (unrated.length === 0) {
+    el.innerHTML = "";
+    return;
   }
+  el.innerHTML = `
+    <div class="pending-card">
+      ${icon("alert")}
+      <div class="pending-copy">
+        <strong>${t("pendingTitle", unrated.length)}</strong>
+        <span>${t("pendingDesc")}</span>
+      </div>
+      <button class="btn" onclick="openRateSheet({type:'movie',id:'${unrated[0].id}'})">${t("pendingRate")}</button>
+    </div>`;
+}
 
-  if (isHome) {
-    renderPendingRatingsBanner();
-    statsBar.innerHTML = "";
-  } else {
-    renderStats();
-    pendingBanner.style.display = "none";
+function renderTonight() {
+  const el = $("tonight-container");
+  if (watchlist.length === 0) {
+    el.innerHTML = "";
+    return;
   }
-
-  grid.innerHTML = sorted
-    .map((movie, i) => {
-      const rating = ratingFn(movie);
-      const ratingClass = getRatingClass(rating);
-      const rank = i + 1;
-
-      let rankBadge = "";
-      if (showRank && rating !== null) {
-        const rankClass = rank <= 3 ? ` rank-${rank}` : "";
-        rankBadge = `<div class="rank-badge${rankClass}">${rank}</div>`;
-      }
-
-      const posterHtml = movie.poster
-        ? `<img src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
-        : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
-
-      let detailParts = [];
-      if (movie.ratingJoint !== null && movie.ratingJoint !== undefined) {
-        detailParts.push(`${t("joint")}: ${formatRating(movie.ratingJoint)}`);
-      }
-      if (movie.ratingHim !== null && movie.ratingHim !== undefined) {
-        detailParts.push(
-          `${icon("user", 14)} ${formatRating(movie.ratingHim)}`,
-        );
-      }
-      if (movie.ratingHer !== null && movie.ratingHer !== undefined) {
-        detailParts.push(
-          `${icon("heart", 14)} ${formatRating(movie.ratingHer)}`,
-        );
-      }
-
-      const ratingDisplay =
-        rating !== null && rating !== undefined
-          ? rating.toFixed(1)
-          : t("noRating");
-
-      const infoBtn = `<button class="btn-info" onclick="event.stopPropagation(); openDetailModal('${movie.id}')" title="${t("movieDetails")}">${icon("info", 16)}</button>`;
-
-      return `
-      <div class="movie-card" onclick="openEditModal('${movie.id}')">
-        ${rankBadge}
-        ${infoBtn}
-        <div class="poster-container">${posterHtml}</div>
-        <div class="card-info">
-          <div class="card-title" title="${escapeHtml(movie.title)}">${escapeHtml(movie.title)}</div>
-          ${movie.year ? `<div class="card-year">${movie.year}</div>` : ""}
-          ${movie.genre ? `<div class="card-genre">${escapeHtml(movie.genre)}</div>` : ""}
-          <div class="card-rating">
-            <span class="rating-badge ${ratingClass}">${ratingDisplay}</span>
-            ${detailParts.length > 0 ? `<span class="card-rating-details">${detailParts.join(" · ")}</span>` : ""}
+  let pick = watchlist.find((w) => w.id === tonightPick);
+  if (!pick) {
+    pick = watchlist[Math.floor(Math.random() * watchlist.length)];
+    tonightPick = pick.id;
+  }
+  const bg = pick.poster
+    ? `<div class="tonight-bg" style="background-image:url('${escapeHtml(pick.poster)}')"></div>`
+    : "";
+  el.innerHTML = `
+    <div class="tonight-card">
+      ${bg}
+      <div class="tonight-content">
+        <div class="tonight-poster">${posterImg(pick)}</div>
+        <div class="tonight-info">
+          <span class="tonight-kicker">${icon("sparkles")} ${t("tonightTitle")}</span>
+          <div class="tonight-title">${escapeHtml(pick.title)}</div>
+          <div class="tonight-meta">${escapeHtml([pick.year, pick.genre].filter(Boolean).join(" · "))}</div>
+          <div class="tonight-actions">
+            <button class="btn btn-primary" onclick="openMarkWatched('${pick.id}')">${icon("check")} ${t("tonightWatched")}</button>
+            ${watchlist.length > 1 ? `<button class="btn btn-ghost" onclick="shuffleTonight()">${icon("shuffle")} ${t("tonightShuffle")}</button>` : ""}
           </div>
         </div>
       </div>
-    `;
+    </div>`;
+}
+
+function shuffleTonight() {
+  if (watchlist.length < 2) return;
+  const others = watchlist.filter((w) => w.id !== tonightPick);
+  tonightPick = others[Math.floor(Math.random() * others.length)].id;
+  renderTonight();
+  trackEvent("tonight_shuffled");
+}
+
+function renderRecsRow() {
+  if (!recsLoaded) {
+    return `
+      <section class="row-section" id="recs-section">
+        <div class="row-head">${icon("sparkles")}<h2>${t("rowRecs")}</h2></div>
+        <div class="h-scroll">${'<div class="skeleton skeleton-pcard"></div>'.repeat(4)}</div>
+      </section>`;
+  }
+  if (recommendations.length === 0) return "";
+
+  const sub =
+    recommendationType === "personalized"
+      ? t("recsPersonalized", buildRecommendationSignals().length)
+      : t("recsTrending");
+
+  const signalCount = buildRecommendationSignals().length;
+  const hint =
+    recommendationType !== "personalized" && signalCount < 3
+      ? `<div class="row-hint">${t("recsHintAddMore", 3 - signalCount)}</div>`
+      : "";
+
+  const cards = recommendations
+    .map((item) => {
+      const inLib = item.tmdbId && movies.some((m) => m.tmdbId === item.tmdbId);
+      const inWl = item.tmdbId && watchlist.some((w) => w.tmdbId === item.tmdbId);
+      const actions =
+        inLib || inWl
+          ? `<button class="chip-btn" disabled>${icon("check")} ${inLib ? t("inLibrary") : t("inWatchlist")}</button>`
+          : `<button class="chip-btn primary" onclick="recToWatchlist(${item.tmdbId})">${icon("bookmark-plus")} ${t("actionToWatchlist")}</button>
+             <button class="chip-btn danger" onclick="dismissRec(${item.tmdbId})" aria-label="${t("recsNotInterested")}">${icon("thumbs-down")}</button>`;
+      return `
+      <div class="pcard">
+        <button class="pcard-poster" style="width:100%;border:none;padding:0;cursor:pointer" onclick="openRecDetail(${item.tmdbId})">
+          ${posterImg(item)}
+          ${item.voteAverage ? `<span class="rating-chip good">${Number(item.voteAverage).toFixed(1)}</span>` : ""}
+        </button>
+        <div class="pcard-info">
+          <div class="pcard-title">${escapeHtml(item.title)}</div>
+          <div class="pcard-meta">${escapeHtml(item.year || "")}</div>
+          ${item.basedOn ? `<div class="pcard-reason">${t("recsBecause", escapeHtml(item.basedOn))}</div>` : ""}
+        </div>
+        <div class="pcard-actions">${actions}</div>
+      </div>`;
     })
     .join("");
 
-  setTimeout(() => updateSliderArrows("movie-grid"), 100);
-  refreshIcons();
+  return `
+    <section class="row-section" id="recs-section">
+      <div class="row-head">
+        ${icon("sparkles")}
+        <h2>${t("rowRecs")}</h2>
+        <span class="row-sub">${sub}</span>
+        <button class="icon-btn" onclick="refreshRecs()" aria-label="${t("recsRefresh")}">${icon("refresh")}</button>
+      </div>
+      ${hint}
+      <div class="h-scroll">${cards}</div>
+    </section>`;
 }
 
-// ========== Render Watchlist ==========
-function renderWatchlist() {
-  const section = document.getElementById("watchlist-section");
-  const content = document.getElementById("watchlist-content");
-  const emptyEl = document.getElementById("watchlist-empty");
-  const track = document.getElementById("watchlist-track");
-  const countEl = document.getElementById("watchlist-count");
+// ----- Library -----
+function renderLibrary() {
+  const grid = $("library-grid");
+  const empty = $("library-empty");
+  $("library-count").textContent = movies.length ? t("nMovies", movies.length) : "";
 
-  section.style.display = "block";
+  let list = movies.slice();
+  let ratingFn = getEffectiveRating;
+  let showRank = true;
+
+  if (librarySeg === "his") {
+    list = list.filter((m) => getHisRating(m) !== null);
+    list.sort((a, b) => getHisRating(b) - getHisRating(a));
+    ratingFn = getHisRating;
+  } else if (librarySeg === "hers") {
+    list = list.filter((m) => getHerRating(m) !== null);
+    list.sort((a, b) => getHerRating(b) - getHerRating(a));
+    ratingFn = getHerRating;
+  } else if (librarySeg === "recent") {
+    list.sort((a, b) => (b.dateAdded || "").localeCompare(a.dateAdded || ""));
+    showRank = false;
+  } else {
+    list.sort(
+      (a, b) => (getEffectiveRating(b) ?? -1) - (getEffectiveRating(a) ?? -1)
+    );
+  }
+
+  // Ranks are computed before the text filter so #1 stays #1 while searching.
+  const ranked = list.map((m, i) => ({ m, rank: i + 1 }));
+
+  const q = librarySearch.trim().toLowerCase();
+  const filtered = q
+    ? ranked.filter(({ m }) => (m.title || "").toLowerCase().includes(q))
+    : ranked;
+
+  if (movies.length === 0) {
+    grid.innerHTML = "";
+    empty.innerHTML = emptyState("film", t("emptyLibraryTitle"), t("emptyLibraryDesc"), t("emptyLibraryAction"), "openAddSheet()");
+    return;
+  }
+  if (filtered.length === 0) {
+    grid.innerHTML = "";
+    empty.innerHTML = q
+      ? `<div class="empty-state"><p style="margin-bottom:0">${t("noSearchResults", escapeHtml(librarySearch))}</p></div>`
+      : emptyState("user", t("emptySegTitle"), t("emptySegDesc"));
+    return;
+  }
+  empty.innerHTML = "";
+  grid.innerHTML = filtered
+    .map(({ m, rank }) => movieCard(m, { ratingFn, rank: showRank ? rank : 0 }))
+    .join("");
+}
+
+// ----- Watchlist view -----
+function renderWatchlistView() {
+  const grid = $("watchlist-grid");
+  const empty = $("watchlist-empty");
+  $("watchlist-count").textContent = watchlist.length ? t("nMovies", watchlist.length) : "";
 
   if (watchlist.length === 0) {
-    content.style.display = "none";
-    emptyEl.style.display = "flex";
-    countEl.textContent = "";
+    grid.innerHTML = "";
+    empty.innerHTML = emptyState("bookmark-plus", t("emptyWatchlistTitle"), t("emptyWatchlistDesc"), t("emptyWatchlistAction"), "openAddSheet()");
+    return;
+  }
+  empty.innerHTML = "";
+  grid.innerHTML = watchlist
+    .slice()
+    .sort((a, b) => (b.dateAdded || "").localeCompare(a.dateAdded || ""))
+    .map(
+      (item) => `
+      <div class="pcard">
+        <button class="pcard-poster" style="width:100%;border:none;padding:0;cursor:pointer" onclick="openWatchlistDetail('${item.id}')">
+          ${posterImg(item)}
+        </button>
+        <div class="pcard-info">
+          <div class="pcard-title">${escapeHtml(item.title)}</div>
+          <div class="pcard-meta">${escapeHtml(item.year || "")}</div>
+        </div>
+        <div class="pcard-actions">
+          <button class="chip-btn primary" onclick="openMarkWatched('${item.id}')">${icon("check")} ${t("markWatched")}</button>
+          <button class="chip-btn danger" onclick="removeWatchlistItem('${item.id}')" aria-label="${t("remove")}">${icon("x")}</button>
+        </div>
+      </div>`
+    )
+    .join("");
+}
+
+// ----- Stats -----
+function renderStats() {
+  const body = $("stats-body");
+  const rated = movies.filter((m) => getEffectiveRating(m) !== null);
+
+  if (movies.length === 0) {
+    body.innerHTML = emptyState("chart", t("statsEmptyTitle"), t("statsEmptyDesc"), t("emptyLibraryAction"), "openAddSheet()");
     return;
   }
 
-  emptyEl.style.display = "none";
-  content.style.display = "block";
-  countEl.textContent = t("nMovies", watchlist.length);
+  const avg = rated.length
+    ? rated.reduce((s, m) => s + getEffectiveRating(m), 0) / rated.length
+    : null;
+  const thisYear = new Date().getFullYear();
+  const watchedThisYear = movies.filter(
+    (m) => (m.dateAdded || "").slice(0, 4) === String(thisYear)
+  ).length;
 
-  track.innerHTML = watchlist
-    .map((item) => {
-      const posterHtml = item.poster
-        ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
-        : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
+  let html = `
+    <div class="stats-tiles">
+      <div class="stat-tile accent"><div class="stat-value">${movies.length}</div><div class="stat-label">${t("statMovies")}</div></div>
+      <div class="stat-tile"><div class="stat-value">${avg !== null ? avg.toFixed(1) : "–"}</div><div class="stat-label">${t("statAvg")}</div></div>
+      <div class="stat-tile"><div class="stat-value">${watchedThisYear}</div><div class="stat-label">${t("statThisYear", thisYear)}</div></div>
+      <div class="stat-tile"><div class="stat-value">${watchlist.length}</div><div class="stat-label">${t("statWatchlist")}</div></div>
+    </div>`;
 
-      return `
-      <div class="watchlist-card">
-        <button class="btn-info" onclick="event.stopPropagation(); openWatchlistDetail('${item.id}')" title="${t("movieDetails")}">${icon("info", 16)}</button>
-        <div class="poster-container">${posterHtml}</div>
-        <div class="card-info">
-          <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
-          ${item.year ? `<div class="card-year">${item.year}</div>` : ""}
-          ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ""}
-          <div class="watchlist-actions">
-            <button class="btn-watched" onclick="openMarkWatchedModal('${item.id}')" title="${t("markAsWatched")}">✓ ${t("watched")}</button>
-            <button class="btn-remove-wl" onclick="removeFromWatchlist('${item.id}')" title="${t("remove")}">✕</button>
+  // Him vs her
+  const hisRated = movies.filter((m) => getHisRating(m) !== null);
+  const herRated = movies.filter((m) => getHerRating(m) !== null);
+  const hisAvg = hisRated.length
+    ? hisRated.reduce((s, m) => s + getHisRating(m), 0) / hisRated.length
+    : null;
+  const herAvg = herRated.length
+    ? herRated.reduce((s, m) => s + getHerRating(m), 0) / herRated.length
+    : null;
+
+  const both = movies.filter(
+    (m) =>
+      m.ratingHim !== null && m.ratingHim !== undefined &&
+      m.ratingHer !== null && m.ratingHer !== undefined
+  );
+
+  if (hisAvg !== null || herAvg !== null) {
+    let syncHtml = "";
+    if (both.length > 0) {
+      const avgDiff =
+        both.reduce((s, m) => s + Math.abs(m.ratingHim - m.ratingHer), 0) / both.length;
+      const syncPct = Math.max(0, Math.round(100 - avgDiff * 10));
+      const fight = both.slice().sort(
+        (a, b) => Math.abs(b.ratingHim - b.ratingHer) - Math.abs(a.ratingHim - a.ratingHer)
+      )[0];
+      const fightDiff = fight ? Math.abs(fight.ratingHim - fight.ratingHer) : 0;
+
+      syncHtml = `
+        <div class="sync-meter">
+          <div class="sync-meter-head">
+            <span>${t("agreementTitle")}</span>
+            <strong>${syncPct}%</strong>
           </div>
+          <div class="meter-track"><div class="meter-fill" style="width:${syncPct}%"></div></div>
+          <p class="stats-note">${t("agreementDesc", both.length)}</p>
         </div>
-      </div>
-    `;
+        ${
+          fight && fightDiff >= 1
+            ? `<button class="fight-row" style="width:100%;text-align:left" onclick="openMovieDetail('${fight.id}')">
+                <div class="fight-poster">${posterImg(fight)}</div>
+                <div class="fight-info">
+                  <strong>${escapeHtml(fight.title)}</strong>
+                  <span>${t("biggestFight")}</span>
+                </div>
+                <div class="fight-scores">
+                  <span class="him">${icon("user", 13)} ${formatRating(fight.ratingHim)}</span>
+                  <span class="her">${icon("heart", 13)} ${formatRating(fight.ratingHer)}</span>
+                </div>
+              </button>`
+            : ""
+        }`;
+    } else {
+      syncHtml = `<p class="stats-note">${t("agreementNone")}</p>`;
+    }
+
+    html += `
+      <div class="stats-card">
+        <h3>${icon("users")} ${t("hisVsHers")}</h3>
+        <div class="vs-row">
+          <div class="vs-side him"><div class="vs-score">${hisAvg !== null ? hisAvg.toFixed(1) : "–"}</div><div class="vs-label">${t("avgHis")}</div></div>
+          <span class="vs-x">×</span>
+          <div class="vs-side her"><div class="vs-score">${herAvg !== null ? herAvg.toFixed(1) : "–"}</div><div class="vs-label">${t("avgHers")}</div></div>
+        </div>
+        ${syncHtml}
+      </div>`;
+  }
+
+  // Genres
+  const genreCount = {};
+  movies.forEach((m) => {
+    (m.genre || "").split(",").map((g) => g.trim()).filter(Boolean).forEach((g) => {
+      genreCount[g] = (genreCount[g] || 0) + 1;
+    });
+  });
+  const topGenres = Object.entries(genreCount).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (topGenres.length > 0) {
+    const max = topGenres[0][1];
+    html += `
+      <div class="stats-card">
+        <h3>${icon("film")} ${t("topGenres")}</h3>
+        ${topGenres
+          .map(
+            ([g, n]) => `
+          <div class="bar-row">
+            <span class="bar-label">${escapeHtml(g)}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.round((n / max) * 100)}%"></div></div>
+            <span class="bar-value">${n}</span>
+          </div>`
+          )
+          .join("")}
+      </div>`;
+  }
+
+  // Decades
+  const decadeCount = {};
+  movies.forEach((m) => {
+    const y = parseInt(m.year);
+    if (y > 1900) {
+      const d = Math.floor(y / 10) * 10;
+      decadeCount[d] = (decadeCount[d] || 0) + 1;
+    }
+  });
+  const decades = Object.entries(decadeCount).sort((a, b) => a[0] - b[0]);
+  if (decades.length > 1) {
+    const max = Math.max(...decades.map(([, n]) => n));
+    html += `
+      <div class="stats-card">
+        <h3>${icon("calendar")} ${t("byDecade")}</h3>
+        ${decades
+          .map(
+            ([d, n]) => `
+          <div class="bar-row">
+            <span class="bar-label">${d}s</span>
+            <div class="bar-track"><div class="bar-fill alt" style="width:${Math.round((n / max) * 100)}%"></div></div>
+            <span class="bar-value">${n}</span>
+          </div>`
+          )
+          .join("")}
+      </div>`;
+  }
+
+  // Best & worst
+  if (rated.length >= 2) {
+    const sorted = rated.slice().sort((a, b) => getEffectiveRating(b) - getEffectiveRating(a));
+    const best = sorted[0];
+    const worst = sorted[sorted.length - 1];
+    html += `
+      <div class="duo-row">
+        <button class="duo-card best" onclick="openMovieDetail('${best.id}')">
+          <div class="duo-poster">${posterImg(best)}</div>
+          <div class="duo-info">
+            <span class="duo-kicker">${t("bestMovie")}</span>
+            <span class="duo-title">${escapeHtml(best.title)}</span>
+            <div class="duo-score">${getEffectiveRating(best).toFixed(1)}</div>
+          </div>
+        </button>
+        <button class="duo-card worst" onclick="openMovieDetail('${worst.id}')">
+          <div class="duo-poster">${posterImg(worst)}</div>
+          <div class="duo-info">
+            <span class="duo-kicker">${t("worstMovie")}</span>
+            <span class="duo-title">${escapeHtml(worst.title)}</span>
+            <div class="duo-score">${getEffectiveRating(worst).toFixed(1)}</div>
+          </div>
+        </button>
+      </div>`;
+  }
+
+  body.innerHTML = html;
+}
+
+// ========== Sheets ==========
+function openSheet(id) {
+  $(id).style.display = "flex";
+  document.body.style.overflow = "hidden";
+}
+
+function closeSheet(id) {
+  $(id).style.display = "none";
+  if (!document.querySelector('.sheet-overlay[style*="flex"]')) {
+    document.body.style.overflow = "";
+  }
+}
+
+function closeAllSheets() {
+  document.querySelectorAll(".sheet-overlay").forEach((el) => (el.style.display = "none"));
+  document.body.style.overflow = "";
+}
+
+document.querySelectorAll(".sheet-overlay").forEach((overlay) => {
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeSheet(overlay.id);
+  });
+});
+
+document.querySelectorAll("[data-close]").forEach((btn) => {
+  btn.addEventListener("click", () => closeSheet(btn.dataset.close));
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    const open = [...document.querySelectorAll(".sheet-overlay")].filter(
+      (el) => el.style.display === "flex"
+    );
+    if (open.length) closeSheet(open[open.length - 1].id);
+  }
+});
+
+// ----- Confirm -----
+let confirmResolve = null;
+
+function showConfirm(message) {
+  $("confirm-message").textContent = message;
+  openSheet("sheet-confirm");
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+  });
+}
+
+$("btn-confirm-ok").addEventListener("click", () => {
+  closeSheet("sheet-confirm");
+  if (confirmResolve) confirmResolve(true);
+  confirmResolve = null;
+});
+
+$("btn-confirm-cancel").addEventListener("click", () => {
+  closeSheet("sheet-confirm");
+  if (confirmResolve) confirmResolve(false);
+  confirmResolve = null;
+});
+
+// ----- Toast -----
+function showToast(message, isError) {
+  const container = $("toast-container");
+  const toast = document.createElement("div");
+  toast.className = "toast" + (isError ? " error" : "");
+  toast.innerHTML = `${icon(isError ? "alert" : "check")} <span>${escapeHtml(message)}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add("out");
+    setTimeout(() => toast.remove(), 300);
+  }, 2600);
+}
+
+// ========== Add sheet ==========
+let addSearchResults = [];
+
+function openAddSheet() {
+  closeAllSheets();
+  openSheet("sheet-add");
+  $("add-search").value = "";
+  addSearchResults = [];
+  renderAddResults();
+  setTimeout(() => $("add-search").focus(), 250);
+  trackEvent("add_sheet_opened");
+}
+
+const runAddSearch = debounce(async (query) => {
+  if (query.length < 2) {
+    addSearchResults = [];
+    renderAddResults();
+    return;
+  }
+  $("add-results").innerHTML = `<p class="add-hint">${t("addSearching")}</p>`;
+  try {
+    const data = await api("search", { query });
+    addSearchResults = data.results || [];
+    renderAddResults(query);
+  } catch (err) {
+    $("add-results").innerHTML = `<p class="add-hint">${escapeHtml(err.message)}</p>`;
+  }
+}, 380);
+
+$("add-search").addEventListener("input", (e) => {
+  runAddSearch(e.target.value.trim());
+});
+
+function renderAddResults(query) {
+  const el = $("add-results");
+  if (addSearchResults.length === 0) {
+    el.innerHTML = `<p class="add-hint">${
+      query ? t("addNoResults", escapeHtml(query)) : t("addSearchHint")
+    }</p>`;
+    return;
+  }
+  el.innerHTML = addSearchResults
+    .map((r, i) => {
+      const inLib = r.tmdbId && movies.some((m) => m.tmdbId === r.tmdbId);
+      const inWl = r.tmdbId && watchlist.some((w) => w.tmdbId === r.tmdbId);
+      const badge = inLib
+        ? `<span class="result-badge">${icon("check")} ${t("inLibrary")}</span>`
+        : inWl
+          ? `<span class="result-badge">${icon("bookmark")} ${t("inWatchlist")}</span>`
+          : "";
+      const actions =
+        inLib || inWl
+          ? ""
+          : `<div class="result-actions">
+              <button class="chip-btn" onclick="addResultToWatchlist(${i})">${icon("bookmark-plus")} ${t("actionToWatchlist")}</button>
+              <button class="chip-btn primary" onclick="addResultAsWatched(${i})">${icon("check")} ${t("actionWatched")}</button>
+            </div>`;
+      return `
+      <div class="result-row">
+        <div class="result-poster">${
+          r.posterThumb || r.poster
+            ? `<img src="${escapeHtml(r.posterThumb || r.poster)}" alt="" loading="lazy">`
+            : `<div class="no-poster">${icon("clapperboard")}</div>`
+        }</div>
+        <div class="result-info">
+          <div class="result-title">${escapeHtml(r.title)}</div>
+          <div class="result-meta">${escapeHtml([r.year, r.genre].filter(Boolean).join(" · "))}</div>
+          ${badge}
+        </div>
+        ${actions}
+      </div>`;
     })
     .join("");
-
-  setTimeout(() => updateSliderArrows("watchlist-track"), 100);
-  refreshIcons();
 }
 
-function renderStats() {
-  if (movies.length === 0) {
-    statsBar.innerHTML = "";
-    return;
+function addResultToWatchlist(index) {
+  const r = addSearchResults[index];
+  if (!r) return;
+  watchlist.push({
+    id: generateId(),
+    tmdbId: r.tmdbId || null,
+    title: r.title,
+    year: r.year || "",
+    poster: r.poster || "",
+    genre: r.genre || "",
+    overview: r.overview || "",
+    dateAdded: todayISO(),
+  });
+  if (r.tmdbId) clearDismissed(r.tmdbId);
+  commit();
+  renderAddResults($("add-search").value.trim());
+  showToast(t("toastAddedWatchlist", r.title));
+  trackEvent("watchlist_added", { source: "search" });
+}
+
+function addResultAsWatched(index) {
+  const r = addSearchResults[index];
+  if (!r) return;
+  const movie = {
+    id: generateId(),
+    tmdbId: r.tmdbId || null,
+    title: r.title,
+    year: r.year || "",
+    poster: r.poster || "",
+    genre: r.genre || "",
+    overview: r.overview || "",
+    ratingJoint: null,
+    ratingHim: null,
+    ratingHer: null,
+    dateAdded: todayISO(),
+  };
+  movies.push(movie);
+  if (r.tmdbId) clearDismissed(r.tmdbId);
+  commit();
+  renderAddResults($("add-search").value.trim());
+  trackEvent("movie_added", { source: "search" });
+  openRateSheet({ type: "movie", id: movie.id, fromAdd: true });
+}
+
+// ========== Rate sheet ==========
+// context: { type: 'movie', id, fromAdd? } — rate/edit an existing movie entry
+//          { type: 'watchlist', id }       — mark watchlist item as watched
+let rateContext = null;
+let rateMode = "joint";
+
+function setSliderFill(input) {
+  input.style.setProperty("--pct", (input.value / 10) * 100 + "%");
+}
+
+["slider-joint", "slider-him", "slider-her"].forEach((id) => {
+  const input = $(id);
+  input.addEventListener("input", () => {
+    $(id + "-val").textContent = Number(input.value).toFixed(1);
+    setSliderFill(input);
+  });
+});
+
+function setRateMode(mode) {
+  rateMode = mode;
+  document.querySelectorAll("#rate-mode .seg").forEach((b) => {
+    b.classList.toggle("active", b.dataset.mode === mode);
+  });
+  $("rate-joint").style.display = mode === "joint" ? "flex" : "none";
+  $("rate-individual").style.display = mode === "individual" ? "flex" : "none";
+}
+
+document.querySelectorAll("#rate-mode .seg").forEach((btn) => {
+  btn.addEventListener("click", () => setRateMode(btn.dataset.mode));
+});
+
+function setSlider(id, value) {
+  const input = $(id);
+  input.value = value;
+  $(id + "-val").textContent = Number(value).toFixed(1);
+  setSliderFill(input);
+}
+
+function openRateSheet(context) {
+  rateContext = context;
+  const item =
+    context.type === "movie"
+      ? movies.find((m) => m.id === context.id)
+      : watchlist.find((w) => w.id === context.id);
+  if (!item) return;
+
+  $("rate-movie").innerHTML = `
+    <div class="result-poster">${posterImg(item)}</div>
+    <div>
+      <div class="rate-movie-title">${escapeHtml(item.title)}</div>
+      <div class="rate-movie-meta">${escapeHtml([item.year, item.genre].filter(Boolean).join(" · "))}</div>
+    </div>`;
+
+  // Prefill from existing ratings
+  const hasIndividual =
+    context.type === "movie" &&
+    ((item.ratingHim !== null && item.ratingHim !== undefined) ||
+      (item.ratingHer !== null && item.ratingHer !== undefined));
+  setRateMode(hasIndividual ? "individual" : "joint");
+  setSlider("slider-joint", context.type === "movie" && item.ratingJoint != null ? item.ratingJoint : 7);
+  setSlider("slider-him", context.type === "movie" && item.ratingHim != null ? item.ratingHim : 7);
+  setSlider("slider-her", context.type === "movie" && item.ratingHer != null ? item.ratingHer : 7);
+
+  // "Rate later" only makes sense when something happens even without a rating
+  $("btn-rate-later").style.display =
+    context.type === "watchlist" || context.fromAdd ? "block" : "none";
+
+  openSheet("sheet-rate");
+}
+
+function collectRatings() {
+  if (rateMode === "joint") {
+    return { ratingJoint: parseFloat($("slider-joint").value), ratingHim: null, ratingHer: null };
   }
-  const total = movies.length;
-  const rated = movies.filter((m) => getEffectiveRating(m) !== null);
-  const avgAll =
-    rated.length > 0
-      ? rated.reduce((s, m) => s + getEffectiveRating(m), 0) / rated.length
-      : 0;
-  const best =
-    rated.length > 0
-      ? [...rated].sort(
-          (a, b) => getEffectiveRating(b) - getEffectiveRating(a),
-        )[0]
-      : null;
-
-  statsBar.innerHTML = `
-    <span class="stat-item">${icon("clapperboard", 14)} <strong>${total}</strong> ${t("nMovies", total)}</span>
-    ${rated.length > 0 ? `<span class="stat-item">⭐ ${t("average")}: <strong>${avgAll.toFixed(1)}</strong></span>` : ""}
-    ${best ? `<span class="stat-item">${icon("trophy", 14)} ${t("currentTop")}: <strong>${escapeHtml(best.title)}</strong> (${getEffectiveRating(best).toFixed(1)})</span>` : ""}
-  `;
-  refreshIcons();
+  return {
+    ratingJoint: null,
+    ratingHim: parseFloat($("slider-him").value),
+    ratingHer: parseFloat($("slider-her").value),
+  };
 }
 
-function renderPendingRatingsBanner() {
-  const banner = document.getElementById("pending-ratings-banner");
-  const unrated = movies.filter((m) => getEffectiveRating(m) === null);
+function watchlistToMovie(item, ratings) {
+  watchlist = watchlist.filter((w) => w.id !== item.id);
+  if (tonightPick === item.id) tonightPick = null;
+  movies.push({
+    id: generateId(),
+    tmdbId: item.tmdbId || null,
+    title: item.title,
+    year: item.year || "",
+    poster: item.poster || "",
+    genre: item.genre || "",
+    overview: item.overview || "",
+    ratingJoint: ratings ? ratings.ratingJoint : null,
+    ratingHim: ratings ? ratings.ratingHim : null,
+    ratingHer: ratings ? ratings.ratingHer : null,
+    dateAdded: todayISO(),
+  });
+}
 
-  if (unrated.length === 0) {
-    banner.style.display = "none";
-    return;
+$("btn-rate-save").addEventListener("click", () => {
+  if (!rateContext) return;
+  const ratings = collectRatings();
+
+  if (rateContext.type === "movie") {
+    const movie = movies.find((m) => m.id === rateContext.id);
+    if (movie) Object.assign(movie, ratings);
+    trackEvent("movie_rated", { mode: rateMode });
+  } else {
+    const item = watchlist.find((w) => w.id === rateContext.id);
+    if (item) {
+      watchlistToMovie(item, ratings);
+      showToast(t("toastAddedLibrary", item.title));
+      trackEvent("watchlist_marked_watched", { mode: rateMode });
+    }
+  }
+  closeSheet("sheet-rate");
+  rateContext = null;
+  commit();
+});
+
+$("btn-rate-later").addEventListener("click", () => {
+  if (rateContext && rateContext.type === "watchlist") {
+    const item = watchlist.find((w) => w.id === rateContext.id);
+    if (item) {
+      watchlistToMovie(item, null);
+      showToast(t("toastAddedLibrary", item.title));
+    }
+    commit();
+  }
+  closeSheet("sheet-rate");
+  rateContext = null;
+});
+
+function openMarkWatched(watchlistId) {
+  openRateSheet({ type: "watchlist", id: watchlistId });
+}
+
+// ========== Detail sheet ==========
+// kind: 'movie' | 'watchlist' | 'rec'
+async function openDetail(kind, item) {
+  openSheet("sheet-detail");
+  renderDetail(kind, item, null);
+
+  if (item.tmdbId) {
+    const cacheKey = `${item.tmdbId}:${userLang}`;
+    let details = detailsCache.get(cacheKey);
+    if (!details) {
+      try {
+        details = await api("details", { tmdbId: item.tmdbId });
+        detailsCache.set(cacheKey, details);
+      } catch {
+        details = null;
+      }
+    }
+    // Only update if this sheet is still showing the same item
+    if (details && $("sheet-detail").style.display === "flex" && currentDetail === item) {
+      renderDetail(kind, item, details);
+    }
+  }
+}
+
+let currentDetail = null;
+
+function renderDetail(kind, item, details) {
+  currentDetail = item;
+  const body = $("detail-body");
+
+  const backdrop = details && details.backdrop ? details.backdrop : "";
+  const overview = (details && details.overview) || item.overview || "";
+  const genres = (details && details.genres) || item.genre || "";
+  const runtime = details && details.runtime ? t("runtimeMin", details.runtime) : "";
+  const director = details && details.director ? details.director : "";
+  const tmdbScore = details && details.voteAverage ? Number(details.voteAverage).toFixed(1) : item.voteAverage ? Number(item.voteAverage).toFixed(1) : "";
+  const cast = (details && details.cast) || [];
+
+  const metaLine = [item.year, genres, runtime].filter(Boolean).join(" · ");
+
+  // Ratings pills
+  let pills = "";
+  if (kind === "movie") {
+    const parts = [];
+    if (item.ratingJoint !== null && item.ratingJoint !== undefined)
+      parts.push(`<span class="detail-rating-pill joint">${icon("users")} ${t("jointLabel")} <strong>${formatRating(item.ratingJoint)}</strong></span>`);
+    if (item.ratingHim !== null && item.ratingHim !== undefined)
+      parts.push(`<span class="detail-rating-pill him">${icon("user")} ${t("hisLabel")} <strong>${formatRating(item.ratingHim)}</strong></span>`);
+    if (item.ratingHer !== null && item.ratingHer !== undefined)
+      parts.push(`<span class="detail-rating-pill her">${icon("heart")} ${t("herLabel")} <strong>${formatRating(item.ratingHer)}</strong></span>`);
+    if (tmdbScore)
+      parts.push(`<span class="detail-rating-pill tmdb">${icon("star")} TMDB <strong>${tmdbScore}</strong></span>`);
+    if (parts.length)
+      pills = `<div class="detail-section"><h3>${t("ratingsTitle")}</h3><div class="detail-ratings">${parts.join("")}</div></div>`;
+  } else if (tmdbScore) {
+    pills = `<div class="detail-section"><div class="detail-ratings"><span class="detail-rating-pill tmdb">${icon("star")} ${t("tmdbScore")} <strong>${tmdbScore}</strong></span></div></div>`;
   }
 
-  const names = unrated
-    .slice(0, 3)
-    .map((m) => `<strong>${escapeHtml(m.title)}</strong>`);
-  let text = names.join(", ");
-  if (unrated.length > 3) text += ` ${t("andMore", unrated.length - 3)}`;
+  // Actions per kind
+  let actions = "";
+  if (kind === "movie") {
+    const rated = getEffectiveRating(item) !== null;
+    actions = `
+      <div class="detail-actions">
+        <button class="btn btn-primary btn-block" onclick="closeSheet('sheet-detail');openRateSheet({type:'movie',id:'${item.id}'})">${icon("star")} ${rated ? t("editRatings") : t("rateMovie")}</button>
+        <div class="detail-actions-row">
+          <button class="btn btn-ghost" onclick="openEditSheet('${item.id}')">${icon("pencil")} ${t("editDetails")}</button>
+          <button class="btn btn-danger-ghost" onclick="deleteMovie('${item.id}')">${icon("trash")} ${t("deleteMovie")}</button>
+        </div>
+      </div>
+      ${item.dateAdded ? `<p class="detail-added">${t("addedOn", formatDate(item.dateAdded))}</p>` : ""}`;
+  } else if (kind === "watchlist") {
+    actions = `
+      <div class="detail-actions">
+        <button class="btn btn-primary btn-block" onclick="closeSheet('sheet-detail');openMarkWatched('${item.id}')">${icon("check")} ${t("markWatched")}</button>
+        <button class="btn btn-danger-ghost btn-block" onclick="removeWatchlistItem('${item.id}', true)">${icon("trash")} ${t("remove")}</button>
+      </div>`;
+  } else if (kind === "rec") {
+    const inLib = item.tmdbId && movies.some((m) => m.tmdbId === item.tmdbId);
+    const inWl = item.tmdbId && watchlist.some((w) => w.tmdbId === item.tmdbId);
+    actions = `
+      <div class="detail-actions">
+        ${
+          inLib || inWl
+            ? `<button class="btn btn-ghost btn-block" disabled>${icon("check")} ${inLib ? t("inLibrary") : t("inWatchlist")}</button>`
+            : `<button class="btn btn-primary btn-block" onclick="closeSheet('sheet-detail');recToWatchlist(${item.tmdbId})">${icon("bookmark-plus")} ${t("actionToWatchlist")}</button>
+               <div class="detail-actions-row">
+                 <button class="btn btn-ghost" onclick="closeSheet('sheet-detail');recAsWatched(${item.tmdbId})">${icon("check")} ${t("actionWatched")}</button>
+                 <button class="btn btn-danger-ghost" onclick="closeSheet('sheet-detail');dismissRec(${item.tmdbId})">${icon("thumbs-down")} ${t("recsNotInterested")}</button>
+               </div>`
+        }
+      </div>`;
+  }
 
-  banner.innerHTML = `
-    ${icon("alert-circle", 14)}
-    <span>${t("pendingBanner", unrated.length, text)}</span>
-    <button class="btn-pending-rate" onclick="openEditModal('${unrated[0].id}')">${t("rateNow")}</button>
-  `;
-  banner.style.display = "flex";
-  refreshIcons();
+  body.innerHTML = `
+    <div class="detail-hero" ${backdrop ? `style="background-image:url('${escapeHtml(backdrop)}')"` : ""}></div>
+    <div class="detail-head">
+      <div class="detail-poster">${posterImg(item)}</div>
+      <div class="detail-titles">
+        <h2>${escapeHtml(item.title)}</h2>
+        <div class="detail-meta">${escapeHtml(metaLine)}${director ? `<br>${t("directedBy")}: <strong>${escapeHtml(director)}</strong>` : ""}</div>
+        ${kind === "rec" && item.basedOn ? `<div class="detail-reason">${t("recsBecause", escapeHtml(item.basedOn))}</div>` : ""}
+      </div>
+    </div>
+    ${pills}
+    ${overview ? `<div class="detail-section"><h3>${t("overviewTitle")}</h3><p class="detail-overview">${escapeHtml(overview)}</p></div>` : ""}
+    ${
+      cast.length
+        ? `<div class="detail-section"><h3>${t("castTitle")}</h3>
+           <div class="cast-scroll">${cast
+             .map(
+               (c) => `
+             <div class="cast-card">
+               <div class="cast-photo">${c.photo ? `<img src="${escapeHtml(c.photo)}" alt="" loading="lazy">` : icon("user")}</div>
+               <div class="cast-name">${escapeHtml(c.name)}</div>
+               <div class="cast-role">${escapeHtml(c.character || "")}</div>
+             </div>`
+             )
+             .join("")}</div></div>`
+        : ""
+    }
+    ${actions}`;
 }
+
+function openMovieDetail(id) {
+  const movie = movies.find((m) => m.id === id);
+  if (movie) openDetail("movie", movie);
+}
+
+function openWatchlistDetail(id) {
+  const item = watchlist.find((w) => w.id === id);
+  if (item) openDetail("watchlist", item);
+}
+
+function openRecDetail(tmdbId) {
+  const item = recommendations.find((r) => r.tmdbId === tmdbId);
+  if (item) openDetail("rec", item);
+}
+
+async function deleteMovie(id) {
+  const movie = movies.find((m) => m.id === id);
+  if (!movie) return;
+  const ok = await showConfirm(t("confirmDelete"));
+  if (!ok) return;
+  movies = movies.filter((m) => m.id !== id);
+  closeSheet("sheet-detail");
+  commit();
+  showToast(t("toastRemoved", movie.title));
+  trackEvent("movie_deleted");
+}
+
+async function removeWatchlistItem(id, fromDetail) {
+  const item = watchlist.find((w) => w.id === id);
+  if (!item) return;
+  const ok = await showConfirm(t("confirmRemoveWatchlist"));
+  if (!ok) return;
+  watchlist = watchlist.filter((w) => w.id !== id);
+  if (tonightPick === id) tonightPick = null;
+  if (fromDetail) closeSheet("sheet-detail");
+  commit();
+  showToast(t("toastRemoved", item.title));
+  trackEvent("watchlist_removed");
+}
+
+// ========== Edit details sheet ==========
+let editMovieId = null;
+
+function openEditSheet(id) {
+  const movie = movies.find((m) => m.id === id);
+  if (!movie) return;
+  editMovieId = id;
+  $("edit-title").value = movie.title || "";
+  $("edit-year").value = movie.year || "";
+  $("edit-genre").value = movie.genre || "";
+  $("edit-poster").value = movie.poster || "";
+  closeSheet("sheet-detail");
+  openSheet("sheet-edit");
+}
+
+$("form-edit").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const movie = movies.find((m) => m.id === editMovieId);
+  if (!movie) return;
+  movie.title = $("edit-title").value.trim();
+  movie.year = $("edit-year").value.trim();
+  movie.genre = $("edit-genre").value.trim();
+  movie.poster = $("edit-poster").value.trim();
+  closeSheet("sheet-edit");
+  commit();
+  showToast(t("toastSaved"));
+});
 
 // ========== Recommendations ==========
-// TMDB genre name -> ID reverse map
 const GENRE_NAME_TO_ID = {
   // PT-BR
-  Ação: 28, Aventura: 12, Animação: 16, Comédia: 35, Crime: 80,
-  Documentário: 99, Drama: 18, Família: 10751, Fantasia: 14, História: 36,
-  Terror: 27, Música: 10402, Mistério: 9648, Romance: 10749,
-  "Ficção Científica": 878, Telefilme: 10770, Suspense: 53, Guerra: 10752,
-  Faroeste: 37,
+  "Ação": 28, "Aventura": 12, "Animação": 16, "Comédia": 35, "Crime": 80,
+  "Documentário": 99, "Drama": 18, "Família": 10751, "Fantasia": 14, "História": 36,
+  "Terror": 27, "Música": 10402, "Mistério": 9648, "Romance": 10749,
+  "Ficção Científica": 878, "Telefilme": 10770, "Suspense": 53, "Guerra": 10752,
+  "Faroeste": 37,
   // EN
   Action: 28, Adventure: 12, Animation: 16, Comedy: 35,
   Documentary: 99, Family: 10751, Fantasy: 14, History: 36,
@@ -729,53 +1440,21 @@ const GENRE_NAME_TO_ID = {
   Western: 37,
 };
 
-function computeSeedThreshold() {
-  // Adaptive threshold based on user's own rating profile: mean + 1 stddev
-  // This adapts to generous users (high avg), strict users (low avg), etc.
-  const rated = movies.filter(
-    (m) => m.tmdbId && getEffectiveRating(m) !== null,
-  );
-  if (rated.length < 3) return null; // not enough data
-
-  const ratings = rated.map((m) => getEffectiveRating(m));
-  const mean = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-  const variance =
-    ratings.reduce((s, r) => s + (r - mean) ** 2, 0) / ratings.length;
-  const stddev = Math.sqrt(variance);
-
-  return mean + stddev;
-}
-
-function getSeedMovies() {
-  const MIN_SEEDS = 3;
-  let threshold = computeSeedThreshold();
-  if (threshold === null) return [];
-
-  const rated = movies
-    .filter((m) => m.tmdbId && getEffectiveRating(m) !== null)
-    .sort((a, b) => getEffectiveRating(b) - getEffectiveRating(a));
-
-  // Get seeds above threshold
-  let seeds = rated.filter((m) => getEffectiveRating(m) >= threshold);
-
-  // If too few seeds, relax threshold until we have at least MIN_SEEDS
-  if (seeds.length < MIN_SEEDS && rated.length >= MIN_SEEDS) {
-    seeds = rated.slice(0, MIN_SEEDS);
-  }
-
-  return seeds.map((m) => ({
-    tmdbId: m.tmdbId,
-    rating: getEffectiveRating(m),
-  }));
-}
-
 function getGenreIdsFromItem(item) {
   if (!item.genre) return [];
   return item.genre
     .split(",")
-    .map((g) => g.trim())
-    .map((g) => GENRE_NAME_TO_ID[g])
+    .map((g) => GENRE_NAME_TO_ID[g.trim()])
     .filter(Boolean);
+}
+
+function computeSeedThreshold() {
+  const rated = movies.filter((m) => m.tmdbId && getEffectiveRating(m) !== null);
+  if (rated.length < 3) return null;
+  const ratings = rated.map((m) => getEffectiveRating(m));
+  const mean = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+  const variance = ratings.reduce((s, r) => s + (r - mean) ** 2, 0) / ratings.length;
+  return mean + Math.sqrt(variance);
 }
 
 function buildRecommendationSignals() {
@@ -818,15 +1497,7 @@ function computeMedianYear() {
   return years.length % 2 ? years[mid] : Math.round((years[mid - 1] + years[mid]) / 2);
 }
 
-function buildDismissedWithGenres() {
-  // dismissed is an array of tmdbIds — we need to look up their genres
-  // from recommendations that were previously displayed
-  // We store genre info at dismiss time now
-  return (dismissedWithGenres || []).slice(-50);
-}
-
 function getDislikedGenreIds() {
-  // Genres from movies rated < 5 (excluding genres also liked in high-rated movies)
   const lowRated = movies.filter((m) => {
     const r = getEffectiveRating(m);
     return r !== null && r < 5;
@@ -835,33 +1506,17 @@ function getDislikedGenreIds() {
 
   const genreCount = {};
   lowRated.forEach((m) => {
-    if (!m.genre) return;
-    m.genre
-      .split(",")
-      .map((g) => g.trim())
-      .forEach((g) => {
-        const id = GENRE_NAME_TO_ID[g];
-        if (id) genreCount[id] = (genreCount[id] || 0) + 1;
-      });
+    getGenreIdsFromItem(m).forEach((id) => {
+      genreCount[id] = (genreCount[id] || 0) + 1;
+    });
   });
 
-  // Genres that appear in seed-level movies should not be excluded
   const threshold = computeSeedThreshold() || 8;
   const likedGenres = new Set();
   movies
-    .filter(
-      (m) =>
-        getEffectiveRating(m) !== null && getEffectiveRating(m) >= threshold,
-    )
+    .filter((m) => getEffectiveRating(m) !== null && getEffectiveRating(m) >= threshold)
     .forEach((m) => {
-      if (!m.genre) return;
-      m.genre
-        .split(",")
-        .map((g) => g.trim())
-        .forEach((g) => {
-          const id = GENRE_NAME_TO_ID[g];
-          if (id) likedGenres.add(id);
-        });
+      getGenreIdsFromItem(m).forEach((id) => likedGenres.add(id));
     });
 
   return Object.entries(genreCount)
@@ -870,19 +1525,17 @@ function getDislikedGenreIds() {
 }
 
 async function loadRecommendations() {
-  const section = document.getElementById("recommendations-section");
-  const track = document.getElementById("recommendations-track");
-
-  track.innerHTML =
-    `<p style="padding:10px;color:var(--text-muted);white-space:nowrap;">${t("loadingRecs")}</p>`;
-  section.style.display = "block";
+  recsLoaded = false;
+  if (currentView === "home") renderHome();
 
   try {
-    const excludeTmdbIds = Array.from(new Set([
-      ...movies.filter((m) => m.tmdbId).map((m) => m.tmdbId),
-      ...watchlist.filter((w) => w.tmdbId).map((w) => w.tmdbId),
-      ...dismissed,
-    ]));
+    const excludeTmdbIds = Array.from(
+      new Set([
+        ...movies.filter((m) => m.tmdbId).map((m) => m.tmdbId),
+        ...watchlist.filter((w) => w.tmdbId).map((w) => w.tmdbId),
+        ...dismissed,
+      ])
+    );
 
     const seeds = buildRecommendationSignals();
     const dislikedGenreIds = getDislikedGenreIds();
@@ -890,7 +1543,7 @@ async function loadRecommendations() {
     const body = { excludeTmdbIds };
     if (seeds.length > 0) body.seeds = seeds;
     if (dislikedGenreIds.length > 0) body.dislikedGenreIds = dislikedGenreIds;
-    const dg = buildDismissedWithGenres();
+    const dg = (dismissedWithGenres || []).slice(-50);
     if (dg.length > 0) body.dismissedWithGenres = dg;
     const medianYear = computeMedianYear();
     if (medianYear) body.medianYear = medianYear;
@@ -903,1375 +1556,208 @@ async function loadRecommendations() {
       results_count: recommendations.length,
       signal_count: seeds.length,
     });
-    renderRecommendations();
   } catch (err) {
-    console.error("Erro ao carregar recomendações:", err);
-    section.style.display = "none";
+    console.error("Recommendations failed:", err);
+    recommendations = [];
   }
+  recsLoaded = true;
+  if (currentView === "home") renderHome();
 }
 
-function renderRecommendations() {
-  const section = document.getElementById("recommendations-section");
-  const track = document.getElementById("recommendations-track");
-  const typeEl = document.getElementById("recommendations-type");
-  const hintEl = document.getElementById("recommendations-hint");
-
-  if (recommendations.length === 0) {
-    section.style.display = "none";
-    return;
-  }
-
-  section.style.display = "block";
-
-  if (recommendationType === "personalized") {
-    const signalCount = buildRecommendationSignals().length;
-    typeEl.textContent = t("basedOnSignals", signalCount);
-    hintEl.style.display = "none";
-  } else {
-    typeEl.textContent = t("trendingThisWeek");
-    const signalCount = buildRecommendationSignals().length;
-    if (signalCount < 3) {
-      const remaining = 3 - signalCount;
-      hintEl.innerHTML = `${icon("info", 14)} ${t("addMoreMovies", remaining)}`;
-    } else {
-      hintEl.textContent = t("noStrongRecs");
-    }
-    hintEl.style.display = "block";
-  }
-
-  track.innerHTML = recommendations
-    .map((item) => {
-      const posterHtml = item.poster
-        ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
-        : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
-
-      const alreadyInList =
-        (item.tmdbId && movies.some((m) => m.tmdbId === item.tmdbId)) ||
-        (item.tmdbId && watchlist.some((w) => w.tmdbId === item.tmdbId));
-
-      return `
-      <div class="watchlist-card recommendation-card">
-        <button class="btn-info" onclick="event.stopPropagation(); openRecommendationDetail(${item.tmdbId})" title="${t("movieDetails")}">${icon("info", 16)}</button>
-        <div class="poster-container">${posterHtml}</div>
-        <div class="card-info">
-          <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
-          ${item.year ? `<div class="card-year">${item.year}</div>` : ""}
-          ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ""}
-          ${item.voteAverage ? `<div class="card-tmdb-score">TMDB: ${item.voteAverage.toFixed(1)}</div>` : ""}
-          <div class="watchlist-actions rec-actions">
-            ${
-              alreadyInList
-                ? `<button class="btn-watched" disabled style="opacity:0.5;">${t("alreadyAdded")}</button>`
-                : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="${t("addToMyListModal")}">${t("addToMyList")}</button>
-                 <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="${t("markAsWatched")}">✓ ${t("watched")}</button>`
-            }
-          </div>
-        </div>
-      </div>
-    `;
-    })
-    .join("");
-
-  setTimeout(() => updateSliderArrows("recommendations-track"), 100);
-  refreshIcons();
+function refreshRecs() {
+  loadRecommendations();
+  trackEvent("recommendations_refreshed");
 }
 
-function buildDetailMovieObject(item) {
-  return {
-    id: item.id || null,
-    tmdbId: item.tmdbId || null,
-    title: item.title,
-    year: item.year ? parseInt(item.year) : null,
-    poster: item.poster,
-    genre: item.genre,
-    overview: item.overview,
-    ratingJoint: item.ratingJoint ?? null,
-    ratingHim: item.ratingHim ?? null,
-    ratingHer: item.ratingHer ?? null,
-  };
+function clearDismissed(tmdbId) {
+  if (!tmdbId) return;
+  dismissed = dismissed.filter((id) => id !== tmdbId);
+  dismissedWithGenres = dismissedWithGenres.filter((d) => d.tmdbId !== tmdbId);
 }
 
-async function openWatchlistDetail(watchlistId) {
-  const item = watchlist.find((w) => w.id === watchlistId);
-  if (!item) return;
-
-  trackEvent("movie_detail_opened", {
-    source: "watchlist",
-  });
-  const content = document.getElementById("detail-content");
-  const movieObj = buildDetailMovieObject(item);
-
-  content.innerHTML = renderDetailBasic(movieObj, {
-    isWatchlist: true,
-    watchlistId,
-    tmdbId: item.tmdbId || null,
-  });
-  refreshIcons();
-  document.getElementById("modal-detail").style.display = "flex";
-
-  if (item.tmdbId) {
-    try {
-      const details = await api("details", { tmdbId: item.tmdbId });
-      content.innerHTML = renderDetailFull(movieObj, details, {
-        isWatchlist: true,
-        watchlistId,
-        tmdbId: item.tmdbId,
-      });
-      refreshIcons();
-    } catch (err) {
-      console.error("Erro ao buscar detalhes:", err);
-    }
-  }
-}
-
-async function openRecommendationDetail(tmdbId) {
+function recToWatchlist(tmdbId) {
   const item = recommendations.find((r) => r.tmdbId === tmdbId);
   if (!item) return;
-
-  trackEvent("movie_detail_opened", {
-    source: "recommendation",
-    recommendation_type: recommendationType,
-  });
-  const content = document.getElementById("detail-content");
-  const movieObj = buildDetailMovieObject(item);
-
-  content.innerHTML = renderDetailBasic(movieObj, {
-    isRecommendation: true,
-    tmdbId,
-  });
-  refreshIcons();
-  document.getElementById("modal-detail").style.display = "flex";
-
-  if (item.tmdbId) {
-    try {
-      const details = await api("details", { tmdbId: item.tmdbId });
-      content.innerHTML = renderDetailFull(movieObj, details, {
-        isRecommendation: true,
-        tmdbId,
-      });
-      refreshIcons();
-    } catch (err) {
-      console.error("Erro ao buscar detalhes:", err);
-    }
-  }
-}
-
-let markWatchedSource = null; // null = watchlist, { tmdbId, ... } = recommendation
-
-function markRecommendationAsWatched(tmdbId) {
-  const item = recommendations.find((r) => r.tmdbId === tmdbId);
-  if (!item) return;
-
-  markWatchedSource = item;
-  document.getElementById("mark-watched-id").value = "";
-  document.getElementById("mark-watched-title").textContent = item.title;
-
-  document.getElementById("mark-rating-joint").checked = true;
-  document.getElementById("mark-joint-rating").style.display = "block";
-  document.getElementById("mark-individual-rating").style.display = "none";
-  document.getElementById("mark-rate-joint").value = 7;
-  document.getElementById("mark-rate-him").value = 7;
-  document.getElementById("mark-rate-her").value = 7;
-  updateSliderDisplay("mark-rate-joint", "mark-rate-joint-val");
-  updateSliderDisplay("mark-rate-him", "mark-rate-him-val");
-  updateSliderDisplay("mark-rate-her", "mark-rate-her-val");
-
-  document.getElementById("modal-mark-watched").style.display = "flex";
-}
-
-async function addRecommendationToWatchlist(tmdbId) {
-  const item = recommendations.find((r) => r.tmdbId === tmdbId);
-  if (!item) return;
-
   watchlist.push({
     id: generateId(),
     tmdbId: item.tmdbId,
     title: item.title,
-    year: item.year ? parseInt(item.year) : null,
-    poster: item.poster || null,
-    genre: item.genre || null,
-    overview: item.overview || null,
-    dateAdded: new Date().toISOString().slice(0, 10),
-  });
-
-  // Remove from recommendations list so it disappears immediately
-  recommendations = recommendations.filter((r) => r.tmdbId !== tmdbId);
-  trackEvent("recommendation_added_to_watchlist", {
-    recommendation_type: recommendationType,
-    total_shown: recommendations.length + 1,
+    year: item.year || "",
+    poster: item.poster || "",
     genre: item.genre || "",
+    overview: item.overview || "",
+    dateAdded: todayISO(),
   });
-  render();
-  await saveToServer();
-}
-
-function clearDismissedTmdbId(tmdbId) {
-  if (!tmdbId) return;
-  dismissed = dismissed.filter((id) => id !== tmdbId);
-}
-
-async function dismissRecommendation(tmdbId) {
-  if (!tmdbId) return;
-
-  const item = recommendations.find((r) => r.tmdbId === tmdbId);
-  if (!dismissed.includes(tmdbId)) {
-    dismissed.push(tmdbId);
-  }
-
-  // Store genre info for dismissed items to build negative signals
-  if (item) {
-    const genreIds = getGenreIdsFromItem(item);
-    if (genreIds.length) {
-      dismissedWithGenres.push({ tmdbId, genreIds, dismissedAt: new Date().toISOString().slice(0, 10) });
-    }
-  }
-
   recommendations = recommendations.filter((r) => r.tmdbId !== tmdbId);
-  trackEvent("recommendation_dismissed", {
-    recommendation_type: recommendationType,
-    total_shown: recommendations.length + 1,
-    genre: item ? item.genre || "" : "",
-  });
-  render();
-  await saveToServer();
-  loadRecommendations();
+  clearDismissed(tmdbId);
+  commit();
+  showToast(t("toastAddedWatchlist", item.title));
+  trackEvent("watchlist_added", { source: "recommendation" });
 }
 
-// ========== Tabs ==========
-document.querySelectorAll(".tab").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    document
-      .querySelectorAll(".tab")
-      .forEach((t) => t.classList.remove("active"));
-    tab.classList.add("active");
-    currentTab = tab.dataset.tab;
-    render();
-  });
-});
-
-// ========== Add Modal (Multi-Select) ==========
-document
-  .getElementById("btn-add")
-  .addEventListener("click", () => openAddModal("watchlist"));
-
-function openAddModal(target) {
-  addTarget = target || "movies";
-  selectedMovies = [];
-  searchResults = [];
-  document.getElementById("search-input").value = "";
-  document.getElementById("search-results").innerHTML = "";
-  renderSelectedMovies();
-
-  // Update modal title based on target
-  const modalTitle = document.querySelector("#modal-add .modal-header h2");
-  if (addTarget === "watchlist") {
-    modalTitle.textContent = t("addToMyListModal");
-  } else {
-    modalTitle.textContent = t("addMovies");
-  }
-
-  trackEvent("add_modal_opened", {
-    target: addTarget,
-  });
-  document.getElementById("modal-add").style.display = "flex";
-}
-
-function closeModal(id) {
-  document.getElementById(id).style.display = "none";
-}
-
-// Close modals on overlay click
-document.querySelectorAll(".modal-overlay").forEach((modal) => {
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) modal.style.display = "none";
-  });
-});
-
-// ========== Movie Search ==========
-document.getElementById("btn-search").addEventListener("click", searchTMDB);
-document.getElementById("search-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    searchTMDB();
-  }
-});
-
-async function searchTMDB() {
-  const query = document.getElementById("search-input").value.trim();
-  if (!query) return;
-
-  const resultsDiv = document.getElementById("search-results");
-  resultsDiv.innerHTML =
-    `<p style="padding:10px;color:var(--text-muted)">${t("searchingMovies")}</p>`;
-
-  try {
-    const data = await api("search", { query });
-    searchResults = data.results || [];
-    trackEvent("movie_search", {
-      target: addTarget,
-      query_length: query.length,
-      results_count: searchResults.length,
-    });
-
-    if (searchResults.length === 0) {
-      resultsDiv.innerHTML =
-        `<p style="padding:10px;color:var(--text-muted)">${t("noResults")}</p>`;
-      return;
-    }
-
-    renderSearchResults();
-  } catch (err) {
-    resultsDiv.innerHTML = `<p style="padding:10px;color:var(--accent)">Erro: ${escapeHtml(err.message)}</p>`;
-  }
-}
-
-function renderSearchResults() {
-  const resultsDiv = document.getElementById("search-results");
-  resultsDiv.innerHTML = searchResults
-    .map((m, i) => {
-      const alreadySelected = isAlreadySelected(m);
-      const posterHtml = m.posterThumb
-        ? `<img src="${escapeHtml(m.posterThumb)}" alt="">`
-        : '<div style="width:40px;height:60px;background:#222;border-radius:4px;display:flex;align-items:center;justify-content:center;"><i data-lucide="clapperboard"></i></div>';
-
-      return `
-      <div class="search-result-item ${alreadySelected ? "selected" : ""}">
-        ${posterHtml}
-        <div class="search-result-info">
-          <div class="title">${escapeHtml(m.title)}</div>
-          <div class="year">${m.year}${m.genre ? " · " + escapeHtml(m.genre) : ""}</div>
-        </div>
-        <button class="btn-add-result ${alreadySelected ? "added" : ""}" onclick="addToSelected(${i})" ${alreadySelected ? "disabled" : ""}>
-          ${alreadySelected ? "✓" : "+"}
-        </button>
-      </div>
-    `;
-    })
-    .join("");
-  refreshIcons();
-}
-
-function isAlreadySelected(m) {
-  if (selectedMovies.some((s) => s.tmdbId && s.tmdbId === m.tmdbId))
-    return true;
-  if (m.tmdbId && movies.some((mv) => mv.tmdbId === m.tmdbId)) return true;
-  if (m.tmdbId && watchlist.some((wl) => wl.tmdbId === m.tmdbId)) return true;
-  return false;
-}
-
-function addToSelected(index) {
-  const m = searchResults[index];
-  if (!m || isAlreadySelected(m)) return;
-
-  selectedMovies.push({
-    tmdbId: m.tmdbId || null,
-    title: m.title,
-    year: m.year || "",
-    poster: m.poster || "",
-    posterThumb: m.posterThumb || "",
-    genre: m.genre || "",
-    overview: m.overview || "",
-  });
-
-  renderSearchResults();
-  renderSelectedMovies();
-}
-
-function removeFromSelected(index) {
-  selectedMovies.splice(index, 1);
-  renderSearchResults();
-  renderSelectedMovies();
-}
-
-function renderSelectedMovies() {
-  const section = document.getElementById("selected-section");
-  const list = document.getElementById("selected-list");
-  const count = document.getElementById("selected-count");
-  const btn = document.getElementById("btn-submit-selected");
-
-  if (selectedMovies.length === 0) {
-    section.style.display = "none";
-    return;
-  }
-
-  section.style.display = "block";
-  count.textContent = selectedMovies.length;
-
-  if (addTarget === "watchlist") {
-    btn.textContent = t("addNToList", selectedMovies.length);
-  } else {
-    btn.textContent = t("addNMovies", selectedMovies.length);
-  }
-
-  list.innerHTML = selectedMovies
-    .map((m, i) => {
-      const thumb = m.posterThumb || m.poster;
-      return `
-      <div class="selected-item">
-        ${thumb ? `<img src="${escapeHtml(thumb)}" alt="">` : '<div class="selected-item-placeholder"><i data-lucide="clapperboard"></i></div>'}
-        <div class="selected-item-info">
-          <span class="title">${escapeHtml(m.title)}</span>
-          <span class="meta">${m.year || ""}${m.genre ? " · " + escapeHtml(m.genre) : ""}</span>
-        </div>
-        <button class="btn-remove-selected" onclick="removeFromSelected(${i})" title="${t("remove")}">✕</button>
-      </div>
-    `;
-    })
-    .join("");
-  refreshIcons();
-}
-
-async function submitSelectedMovies() {
-  if (selectedMovies.length === 0) return;
-  const itemCount = selectedMovies.length;
-
-  if (addTarget === "watchlist") {
-    for (const sm of selectedMovies) {
-      watchlist.push({
-        id: generateId(),
-        tmdbId: sm.tmdbId || null,
-        title: sm.title,
-        year: sm.year ? parseInt(sm.year) : null,
-        poster: sm.poster || null,
-        genre: sm.genre || null,
-        overview: sm.overview || null,
-        dateAdded: new Date().toISOString().slice(0, 10),
-      });
-    }
-  } else {
-    for (const sm of selectedMovies) {
-      movies.push({
-        id: generateId(),
-        tmdbId: sm.tmdbId || null,
-        title: sm.title,
-        year: sm.year ? parseInt(sm.year) : null,
-        poster: sm.poster || null,
-        genre: sm.genre || null,
-        overview: sm.overview || null,
-        ratingJoint: null,
-        ratingHim: null,
-        ratingHer: null,
-        dateAdded: new Date().toISOString().slice(0, 10),
-      });
-    }
-  }
-
-  trackEvent("movies_added", {
-    target: addTarget,
-    item_count: itemCount,
-  });
-  selectedMovies = [];
-  closeModal("modal-add");
-  render();
-  await saveToServer();
-}
-
-// ========== Watchlist Actions ==========
-function openMarkWatchedModal(watchlistId) {
-  const item = watchlist.find((w) => w.id === watchlistId);
+function recAsWatched(tmdbId) {
+  const item = recommendations.find((r) => r.tmdbId === tmdbId);
   if (!item) return;
-
-  markWatchedSource = null; // from watchlist
-  document.getElementById("mark-watched-id").value = item.id;
-  document.getElementById("mark-watched-title").textContent = item.title;
-
-  document.getElementById("mark-rating-joint").checked = true;
-  document.getElementById("mark-joint-rating").style.display = "block";
-  document.getElementById("mark-individual-rating").style.display = "none";
-  document.getElementById("mark-rate-joint").value = 7;
-  document.getElementById("mark-rate-him").value = 7;
-  document.getElementById("mark-rate-her").value = 7;
-  updateSliderDisplay("mark-rate-joint", "mark-rate-joint-val");
-  updateSliderDisplay("mark-rate-him", "mark-rate-him-val");
-  updateSliderDisplay("mark-rate-her", "mark-rate-her-val");
-
-  document.getElementById("modal-mark-watched").style.display = "flex";
-}
-
-async function submitMarkWatched() {
-  const isJoint = document.getElementById("mark-rating-joint").checked;
-  let item;
-  let source = "watchlist";
-
-  if (markWatchedSource) {
-    // Coming from a recommendation
-    item = markWatchedSource;
-    recommendations = recommendations.filter((r) => r.tmdbId !== item.tmdbId);
-    markWatchedSource = null;
-    source = "recommendation";
-  } else {
-    // Coming from watchlist
-    const id = document.getElementById("mark-watched-id").value;
-    const idx = watchlist.findIndex((w) => w.id === id);
-    if (idx === -1) return;
-    item = watchlist[idx];
-    watchlist.splice(idx, 1);
-  }
-
-  movies.push({
+  const movie = {
     id: generateId(),
     tmdbId: item.tmdbId,
     title: item.title,
-    year: item.year ? parseInt(item.year) : null,
-    poster: item.poster,
-    genre: item.genre,
-    overview: item.overview || null,
-    ratingJoint: isJoint
-      ? parseFloat(document.getElementById("mark-rate-joint").value)
-      : null,
-    ratingHim: !isJoint
-      ? parseFloat(document.getElementById("mark-rate-him").value)
-      : null,
-    ratingHer: !isJoint
-      ? parseFloat(document.getElementById("mark-rate-her").value)
-      : null,
-    dateAdded: new Date().toISOString().slice(0, 10),
-  });
-
-  clearDismissedTmdbId(item.tmdbId);
-
-  trackEvent("movie_marked_watched", {
-    source,
-    rating_mode: isJoint ? "joint" : "individual",
-  });
-  closeModal("modal-mark-watched");
-  render();
-  await saveToServer();
-  loadRecommendations();
-}
-
-async function removeFromWatchlist(id) {
-  if (!confirm(t("confirmRemoveFromList"))) return;
-  watchlist = watchlist.filter((w) => w.id !== id);
-  trackEvent("watchlist_item_removed");
-  render();
-  await saveToServer();
-}
-
-// Mark-watched rating type toggle
-document.querySelectorAll('input[name="mark-rating-type"]').forEach((radio) => {
-  radio.addEventListener("change", () => {
-    const isJoint = document.getElementById("mark-rating-joint").checked;
-    document.getElementById("mark-joint-rating").style.display = isJoint
-      ? "block"
-      : "none";
-    document.getElementById("mark-individual-rating").style.display = isJoint
-      ? "none"
-      : "block";
-  });
-});
-
-// Mark-watched slider displays
-["mark-rate-joint", "mark-rate-him", "mark-rate-her"].forEach((id) => {
-  document
-    .getElementById(id)
-    .addEventListener("input", () => updateSliderDisplay(id, id + "-val"));
-});
-
-// ========== Detail Modal ==========
-async function openDetailModal(movieId) {
-  const movie = movies.find((m) => m.id === movieId);
-  if (!movie) return;
-
-  trackEvent("movie_detail_opened", {
-    source: "library",
-  });
-  const content = document.getElementById("detail-content");
-  content.innerHTML = renderDetailBasic(movie);
-  refreshIcons();
-  document.getElementById("modal-detail").style.display = "flex";
-
-  if (movie.tmdbId) {
-    try {
-      const details = await api("details", { tmdbId: movie.tmdbId });
-      content.innerHTML = renderDetailFull(movie, details);
-      refreshIcons();
-    } catch (err) {
-      console.error("Erro ao buscar detalhes:", err);
-    }
-  }
-}
-
-function buildRatingHtml(movie) {
-  let parts = [];
-  if (movie.ratingJoint !== null && movie.ratingJoint !== undefined) {
-    parts.push(
-      `<span class="detail-rating-item">${t("jointLabel")}: <strong>${formatRating(movie.ratingJoint)}</strong></span>`,
-    );
-  }
-  if (movie.ratingHim !== null && movie.ratingHim !== undefined) {
-    parts.push(
-      `<span class="detail-rating-item">${icon("user", 16)} ${t("hisLabel")}: <strong>${formatRating(movie.ratingHim)}</strong></span>`,
-    );
-  }
-  if (movie.ratingHer !== null && movie.ratingHer !== undefined) {
-    parts.push(
-      `<span class="detail-rating-item">${icon("heart", 16)} ${t("herLabel")}: <strong>${formatRating(movie.ratingHer)}</strong></span>`,
-    );
-  }
-  if (parts.length === 0) {
-    return `<div class="detail-no-rating">${t("noRatingYet")}</div>`;
-  }
-  return `<div class="detail-user-ratings">${parts.join("")}</div>`;
-}
-
-function renderDetailActions(movie, opts) {
-  if (opts && opts.isRecommendation) {
-    const tmdbId = opts.tmdbId;
-    return `
-      <div class="detail-actions">
-        <button class="btn-primary" onclick="closeModal('modal-detail'); addRecommendationToWatchlist(${tmdbId})">+ ${t("myListBtn")}</button>
-        <button class="btn-secondary" onclick="closeModal('modal-detail'); markRecommendationAsWatched(${tmdbId})">✓ ${t("watched")}</button>
-      </div>
-    `;
-  }
-  if (opts && opts.isWatchlist) {
-    const watchlistId = opts.watchlistId;
-    return `
-      <div class="detail-actions">
-        <button class="btn-primary" onclick="closeModal('modal-detail'); openMarkWatchedModal('${watchlistId}')">✓ ${t("watched")}</button>
-        <button class="btn-secondary" onclick="closeModal('modal-detail'); removeFromWatchlist('${watchlistId}')">${t("removeBtn")}</button>
-      </div>
-    `;
-  }
-  return `
-    <div class="detail-actions">
-      <button class="btn-primary" onclick="closeModal('modal-detail'); openEditModal('${movie.id}')">${t("editNotes")}</button>
-    </div>
-  `;
-}
-
-function renderDetailBasic(movie, opts) {
-  return `
-    <div class="detail-header">
-      ${movie.poster ? `<img class="detail-poster" src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}">` : '<div class="detail-poster-empty"><i data-lucide="clapperboard"></i></div>'}
-      <div class="detail-info">
-        <h2>${escapeHtml(movie.title)}</h2>
-        <div class="detail-meta">
-          ${movie.year ? `<span>${movie.year}</span>` : ""}
-          ${movie.genre ? `<span>${escapeHtml(movie.genre)}</span>` : ""}
-        </div>
-        ${buildRatingHtml(movie)}
-      </div>
-    </div>
-    ${movie.overview ? `<div class="detail-section"><h3>${t("synopsis")}</h3><p>${escapeHtml(movie.overview)}</p></div>` : ""}
-    ${movie.tmdbId ? `<div class="detail-loading">${t("loadingDetails")}</div>` : ""}
-    ${renderDetailActions(movie, opts)}
-  `;
-}
-
-function renderDetailFull(movie, details, opts) {
-  const castHtml = (details.cast || [])
-    .map(
-      (c) => `
-    <div class="detail-cast-item">
-      ${c.photo ? `<img src="${escapeHtml(c.photo)}" alt="${escapeHtml(c.name)}">` : '<div class="cast-no-photo"><i data-lucide="user"></i></div>'}
-      <div class="cast-text">
-        <span class="cast-name">${escapeHtml(c.name)}</span>
-        <span class="cast-character">${escapeHtml(c.character)}</span>
-      </div>
-    </div>
-  `,
-    )
-    .join("");
-
-  const headerStyle = details.backdrop
-    ? `style="background-image: linear-gradient(to bottom, rgba(30,30,42,0.6), rgba(30,30,42,1)), url('${escapeHtml(details.backdrop)}'); background-size: cover; background-position: center top;"`
-    : "";
-
-  return `
-    <div class="detail-header" ${headerStyle}>
-      ${details.poster || movie.poster ? `<img class="detail-poster" src="${escapeHtml(details.poster || movie.poster)}" alt="${escapeHtml(movie.title)}">` : '<div class="detail-poster-empty"><i data-lucide="clapperboard"></i></div>'}
-      <div class="detail-info">
-        <h2>${escapeHtml(details.title || movie.title)}</h2>
-        ${details.originalTitle && details.originalTitle !== details.title ? `<div class="detail-original-title">${escapeHtml(details.originalTitle)}</div>` : ""}
-        <div class="detail-meta">
-          ${details.year ? `<span>${details.year}</span>` : ""}
-          ${details.runtime ? `<span>${details.runtime} min</span>` : ""}
-          ${details.director ? `<span>${t("direction")}: ${escapeHtml(details.director)}</span>` : ""}
-        </div>
-        ${details.genres ? `<div class="detail-genres">${escapeHtml(details.genres)}</div>` : ""}
-        ${details.voteAverage ? `<div class="detail-tmdb-score">TMDB: <strong>${details.voteAverage.toFixed(1)}</strong></div>` : ""}
-        ${buildRatingHtml(movie)}
-      </div>
-    </div>
-    ${details.overview ? `<div class="detail-section"><h3>${t("synopsis")}</h3><p>${escapeHtml(details.overview)}</p></div>` : ""}
-    ${castHtml ? `<div class="detail-section"><h3>${t("cast")}</h3><div class="detail-cast-grid">${castHtml}</div></div>` : ""}
-    ${renderDetailActions(movie, opts)}
-  `;
-}
-
-// ========== Edit Modal ==========
-function openEditModal(id) {
-  const movie = movies.find((m) => m.id === id);
-  if (!movie) return;
-
-  trackEvent("movie_edit_opened", {
-    has_rating: getEffectiveRating(movie) !== null,
-  });
-  document.getElementById("edit-id").value = movie.id;
-  document.getElementById("edit-title").value = movie.title;
-  document.getElementById("edit-year").value = movie.year || "";
-  document.getElementById("edit-poster").value = movie.poster || "";
-  document.getElementById("edit-genre").value = movie.genre || "";
-
-  const hasJoint =
-    movie.ratingJoint !== null && movie.ratingJoint !== undefined;
-  const hasIndividual =
-    (movie.ratingHim !== null && movie.ratingHim !== undefined) ||
-    (movie.ratingHer !== null && movie.ratingHer !== undefined);
-
-  if (hasJoint) {
-    document.getElementById("edit-rating-joint").checked = true;
-    document.getElementById("edit-joint-rating").style.display = "block";
-    document.getElementById("edit-individual-rating").style.display = "none";
-    document.getElementById("edit-rate-joint").value = movie.ratingJoint;
-  } else if (hasIndividual) {
-    document.getElementById("edit-rating-individual").checked = true;
-    document.getElementById("edit-joint-rating").style.display = "none";
-    document.getElementById("edit-individual-rating").style.display = "block";
-    document.getElementById("edit-rate-him").value = movie.ratingHim ?? 5;
-    document.getElementById("edit-rate-her").value = movie.ratingHer ?? 5;
-  } else {
-    document.getElementById("edit-rating-joint").checked = true;
-    document.getElementById("edit-joint-rating").style.display = "block";
-    document.getElementById("edit-individual-rating").style.display = "none";
-    document.getElementById("edit-rate-joint").value = 7;
-  }
-
-  updateSliderDisplay("edit-rate-joint", "edit-rate-joint-val");
-  updateSliderDisplay("edit-rate-him", "edit-rate-him-val");
-  updateSliderDisplay("edit-rate-her", "edit-rate-her-val");
-
-  document.getElementById("modal-edit").style.display = "flex";
-}
-
-// Rating type toggle (edit)
-document.querySelectorAll('input[name="edit-rating-type"]').forEach((radio) => {
-  radio.addEventListener("change", () => {
-    const isJoint = document.getElementById("edit-rating-joint").checked;
-    document.getElementById("edit-joint-rating").style.display = isJoint
-      ? "block"
-      : "none";
-    document.getElementById("edit-individual-rating").style.display = isJoint
-      ? "none"
-      : "block";
-  });
-});
-
-// Slider displays
-function updateSliderDisplay(sliderId, displayId) {
-  const slider = document.getElementById(sliderId);
-  const display = document.getElementById(displayId);
-  display.textContent = parseFloat(slider.value).toFixed(1);
-}
-
-["edit-rate-joint", "edit-rate-him", "edit-rate-her"].forEach((id) => {
-  document
-    .getElementById(id)
-    .addEventListener("input", () => updateSliderDisplay(id, id + "-val"));
-});
-
-// Form Submit (Edit)
-document.getElementById("form-edit").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const id = document.getElementById("edit-id").value;
-  const idx = movies.findIndex((m) => m.id === id);
-  if (idx === -1) return;
-
-  const isJoint = document.getElementById("edit-rating-joint").checked;
-  movies[idx] = {
-    ...movies[idx],
-    title: document.getElementById("edit-title").value.trim(),
-    year: document.getElementById("edit-year").value
-      ? parseInt(document.getElementById("edit-year").value)
-      : null,
-    poster: document.getElementById("edit-poster").value.trim() || null,
-    genre: document.getElementById("edit-genre").value.trim() || null,
-    ratingJoint: isJoint
-      ? parseFloat(document.getElementById("edit-rate-joint").value)
-      : null,
-    ratingHim: !isJoint
-      ? parseFloat(document.getElementById("edit-rate-him").value)
-      : null,
-    ratingHer: !isJoint
-      ? parseFloat(document.getElementById("edit-rate-her").value)
-      : null,
+    year: item.year || "",
+    poster: item.poster || "",
+    genre: item.genre || "",
+    overview: item.overview || "",
+    ratingJoint: null,
+    ratingHim: null,
+    ratingHer: null,
+    dateAdded: todayISO(),
   };
+  movies.push(movie);
+  recommendations = recommendations.filter((r) => r.tmdbId !== tmdbId);
+  clearDismissed(tmdbId);
+  commit();
+  trackEvent("movie_added", { source: "recommendation" });
+  openRateSheet({ type: "movie", id: movie.id, fromAdd: true });
+}
 
-  if (getEffectiveRating(movies[idx]) !== null) {
-    clearDismissedTmdbId(movies[idx].tmdbId);
-  }
+function dismissRec(tmdbId) {
+  const item = recommendations.find((r) => r.tmdbId === tmdbId);
+  if (!tmdbId || !item) return;
+  if (!dismissed.includes(tmdbId)) dismissed.push(tmdbId);
+  dismissedWithGenres.push({ tmdbId, genreIds: getGenreIdsFromItem(item) });
+  recommendations = recommendations.filter((r) => r.tmdbId !== tmdbId);
+  commit();
+  showToast(t("toastDismissed"));
+  trackEvent("recommendation_dismissed");
+}
 
-  trackEvent("movie_updated", {
-    rating_mode: isJoint ? "joint" : "individual",
-    has_tmdb: Boolean(movies[idx].tmdbId),
+// ========== Login events ==========
+document.querySelectorAll(".login-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".login-tab").forEach((x) => x.classList.remove("active"));
+    tab.classList.add("active");
+    const mode = tab.dataset.ltab;
+    $("form-enter").style.display = mode === "enter" ? "block" : "none";
+    $("form-create").style.display = mode === "create" ? "block" : "none";
+    hideLoginMessage();
   });
-  closeModal("modal-edit");
-  render();
-  await saveToServer();
-  loadRecommendations();
 });
 
-// Delete
-document.getElementById("btn-delete").addEventListener("click", async () => {
-  const id = document.getElementById("edit-id").value;
-  if (!confirm(t("confirmDelete"))) return;
-  movies = movies.filter((m) => m.id !== id);
-  trackEvent("movie_deleted");
-  closeModal("modal-edit");
-  render();
-  await saveToServer();
-});
-
-// ========== Keyboard ==========
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    document
-      .querySelectorAll(".modal-overlay")
-      .forEach((m) => (m.style.display = "none"));
-  }
-});
-
-// ========== UI Overrides ==========
-function formatRating(val) {
-  return val !== null && val !== undefined ? val.toFixed(1) : "--";
-}
-
-function showEmptyState({ kicker, title, description, actionLabel, action }) {
-  emptyState.innerHTML = `
-    <div class="empty-state-panel">
-      <img src="assets/logo.png" alt="CineNotes" class="empty-icon" />
-      <span class="empty-kicker">${escapeHtml(kicker)}</span>
-      <h2>${escapeHtml(title)}</h2>
-      <p>${escapeHtml(description)}</p>
-      <button class="btn-primary" onclick="${action}">${escapeHtml(actionLabel)}</button>
-    </div>
-  `;
-  emptyState.style.display = "block";
-}
-
-function getTabEmptyState() {
-  switch (currentTab) {
-    case "ranking":
-      return { ...t("emptyRanking"), action: "openAddModal('movies')" };
-    case "ele":
-      return movies.length === 0
-        ? { ...t("emptyHisNoMovies"), action: "openAddModal('movies')" }
-        : { ...t("emptyHisPending"), action: `openEditModal('${movies[0]?.id || ""}')` };
-    case "ela":
-      return movies.length === 0
-        ? { ...t("emptyHersNoMovies"), action: "openAddModal('movies')" }
-        : { ...t("emptyHersPending"), action: `openEditModal('${movies[0]?.id || ""}')` };
-    case "todos":
-      return { ...t("emptyAll"), action: "openAddModal('movies')" };
-    default:
-      return { ...t("emptyDefault"), action: "openAddModal('watchlist')" };
-  }
-}
-
-function render() {
-  const isHome = currentTab === "inicio";
-  const isRanking = ["inicio", "ranking", "ele", "ela"].includes(currentTab);
-  const isTodos = currentTab === "todos";
-
-  const watchlistSection = document.getElementById("watchlist-section");
-  const recsSection = document.getElementById("recommendations-section");
-  const pendingBanner = document.getElementById("pending-ratings-banner");
-
-  if (isHome) {
-    renderWatchlist();
-    renderRecommendations();
-    watchlistSection.style.display = "block";
-    statsBar.innerHTML = "";
-  } else {
-    renderStats();
-    watchlistSection.style.display = "none";
-    recsSection.style.display = "none";
-  }
-
-  let sorted = [...movies];
-  let showRank = true;
-  let ratingFn = getEffectiveRating;
-  let rankingLabel = `${icon("trophy")} ${t("ranking")}`;
-
-  switch (currentTab) {
-    case "inicio":
-    case "ranking":
-      sorted.sort(
-        (a, b) => (getEffectiveRating(b) ?? -1) - (getEffectiveRating(a) ?? -1),
-      );
-      rankingLabel = `${icon("trophy")} ${t("rankingGeneral")}`;
-      break;
-    case "ele":
-      sorted = sorted.filter((m) => getHisRating(m) !== null);
-      sorted.sort((a, b) => getHisRating(b) - getHisRating(a));
-      ratingFn = getHisRating;
-      rankingLabel = `${icon("user")} ${t("rankingHis")}`;
-      break;
-    case "ela":
-      sorted = sorted.filter((m) => getHerRating(m) !== null);
-      sorted.sort((a, b) => getHerRating(b) - getHerRating(a));
-      ratingFn = getHerRating;
-      rankingLabel = `${icon("heart")} ${t("rankingHers")}`;
-      break;
-    case "todos":
-      sorted.sort((a, b) =>
-        (b.dateAdded || "").localeCompare(a.dateAdded || ""),
-      );
-      showRank = false;
-      rankingLabel = `${icon("film")} ${t("allMovies")}`;
-      break;
-  }
-
-  const rankingSection = document.getElementById("ranking-section");
-  const rankingSlider = document.getElementById("ranking-slider");
-  const rankingTitle = document.getElementById("ranking-title");
-  const rankingCount = document.getElementById("ranking-count");
-
-  rankingTitle.innerHTML = rankingLabel;
-
-  if (movies.length === 0) {
-    rankingSection.style.display = "none";
-    showEmptyState(getTabEmptyState());
-  } else {
-    rankingSection.style.display = isRanking || isTodos ? "block" : "none";
-    rankingSlider.style.display = sorted.length > 0 ? "block" : "none";
-    rankingCount.textContent = t("nMovies", sorted.length);
-
-    if ((currentTab === "ele" || currentTab === "ela") && sorted.length === 0) {
-      rankingSection.style.display = "none";
-      showEmptyState(getTabEmptyState());
-    } else {
-      emptyState.style.display = "none";
-    }
-  }
-
-  if (isHome) {
-    renderPendingRatingsBanner();
-  } else {
-    pendingBanner.style.display = "none";
-  }
-
-  grid.innerHTML = sorted
-    .map((movie, i) => {
-      const rating = ratingFn(movie);
-      const ratingClass = getRatingClass(rating);
-      const rank = i + 1;
-      const rankBadge =
-        showRank && rating !== null
-          ? `<div class="rank-badge${rank <= 3 ? ` rank-${rank}` : ""}">${rank}</div>`
-          : "";
-      const posterHtml = movie.poster
-        ? `<img src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
-        : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
-
-      const detailParts = [];
-      if (movie.ratingJoint !== null && movie.ratingJoint !== undefined) {
-        detailParts.push(`${t("joint")}: ${formatRating(movie.ratingJoint)}`);
-      }
-      if (movie.ratingHim !== null && movie.ratingHim !== undefined) {
-        detailParts.push(
-          `${icon("user", 14)} ${formatRating(movie.ratingHim)}`,
-        );
-      }
-      if (movie.ratingHer !== null && movie.ratingHer !== undefined) {
-        detailParts.push(
-          `${icon("heart", 14)} ${formatRating(movie.ratingHer)}`,
-        );
-      }
-
-      return `
-      <div class="movie-card" onclick="openEditModal('${movie.id}')">
-        ${rankBadge}
-        <button class="btn-info" onclick="event.stopPropagation(); openDetailModal('${movie.id}')" title="${t("movieDetails")}">${icon("info", 16)}</button>
-        <div class="poster-container">${posterHtml}</div>
-        <div class="card-info">
-          <div class="card-title" title="${escapeHtml(movie.title)}">${escapeHtml(movie.title)}</div>
-          ${movie.year ? `<div class="card-year">${movie.year}</div>` : ""}
-          ${movie.genre ? `<div class="card-genre">${escapeHtml(movie.genre)}</div>` : ""}
-          <div class="card-rating">
-            <span class="rating-badge ${ratingClass}">${rating !== null && rating !== undefined ? rating.toFixed(1) : t("noRating")}</span>
-            ${
-              detailParts.length > 0
-                ? `<span class="card-rating-details">${detailParts.join(" &middot; ")}</span>`
-                : ""
-            }
-          </div>
-        </div>
-      </div>`;
-    })
-    .join("");
-
-  setTimeout(() => updateSliderArrows("movie-grid"), 100);
-  refreshIcons();
-  trackCurrentView();
-}
-
-function renderWatchlist() {
-  const section = document.getElementById("watchlist-section");
-  const content = document.getElementById("watchlist-content");
-  const emptyEl = document.getElementById("watchlist-empty");
-  const track = document.getElementById("watchlist-track");
-  const countEl = document.getElementById("watchlist-count");
-
-  section.style.display = "block";
-
-  if (watchlist.length === 0) {
-    content.style.display = "none";
-    emptyEl.style.display = "flex";
-    countEl.textContent = "";
-    return;
-  }
-
-  emptyEl.style.display = "none";
-  content.style.display = "block";
-  countEl.textContent = t("nMovies", watchlist.length);
-
-  track.innerHTML = watchlist
-    .map((item) => {
-      const posterHtml = item.poster
-        ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
-        : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
-
-      return `
-      <div class="watchlist-card">
-        <button class="btn-info" onclick="event.stopPropagation(); openWatchlistDetail('${item.id}')" title="${t("movieDetails")}">${icon("info", 16)}</button>
-        <div class="poster-container">${posterHtml}</div>
-        <div class="card-info">
-          <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
-          ${item.year ? `<div class="card-year">${item.year}</div>` : ""}
-          ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ""}
-          <div class="watchlist-actions">
-            <button class="btn-watched" onclick="openMarkWatchedModal('${item.id}')" title="${t("markAsWatched")}">${icon("check", 14)} ${t("watched")}</button>
-            <button class="btn-remove-wl" onclick="removeFromWatchlist('${item.id}')" title="${t("remove")}">${icon("x", 14)}</button>
-          </div>
-        </div>
-      </div>`;
-    })
-    .join("");
-
-  setTimeout(() => updateSliderArrows("watchlist-track"), 100);
-  refreshIcons();
-}
-
-function renderStats() {
-  if (movies.length === 0) {
-    statsBar.innerHTML = "";
-    return;
-  }
-
-  const total = movies.length;
-  const rated = movies.filter((m) => getEffectiveRating(m) !== null);
-  const avgAll =
-    rated.length > 0
-      ? rated.reduce((sum, movie) => sum + getEffectiveRating(movie), 0) /
-        rated.length
-      : 0;
-  const best =
-    rated.length > 0
-      ? [...rated].sort(
-          (a, b) => getEffectiveRating(b) - getEffectiveRating(a),
-        )[0]
-      : null;
-
-  statsBar.innerHTML = `
-    <div class="stat-card">
-      <span class="stat-label">${icon("clapperboard", 16)} ${t("library")}</span>
-      <strong>${total}</strong>
-      <span class="stat-foot">${t("moviesInRanking", total)}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">${icon("star", 16)} ${t("average")}</span>
-      <strong>${rated.length > 0 ? avgAll.toFixed(1) : "--"}</strong>
-      <span class="stat-foot">${t("consolidatedAvg")}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">${icon("bookmark", 16)} ${t("watchlistLabel")}</span>
-      <strong>${watchlist.length}</strong>
-      <span class="stat-foot">${t("awaitingSession", watchlist.length)}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">${icon("trophy", 16)} ${t("currentTop")}</span>
-      <strong>${best ? getEffectiveRating(best).toFixed(1) : "--"}</strong>
-      <span class="stat-foot">${best ? escapeHtml(best.title) : t("addNotesToHighlight")}</span>
-    </div>
-  `;
-  refreshIcons();
-}
-
-function renderPendingRatingsBanner() {
-  const banner = document.getElementById("pending-ratings-banner");
-  const unrated = movies.filter((m) => getEffectiveRating(m) === null);
-
-  if (unrated.length === 0) {
-    banner.style.display = "none";
-    return;
-  }
-
-  const names = unrated
-    .slice(0, 3)
-    .map((m) => `<strong>${escapeHtml(m.title)}</strong>`);
-  let text = names.join(", ");
-  if (unrated.length > 3) text += ` ${t("andMore", unrated.length - 3)}`;
-
-  banner.innerHTML = `
-    ${icon("alert-circle", 16)}
-    <span>${t("pendingBanner", unrated.length, text)}</span>
-    <button class="btn-pending-rate" onclick="openEditModal('${unrated[0].id}')">${t("rateNow")}</button>
-  `;
-  banner.style.display = "flex";
-  refreshIcons();
-}
-
-function getGenreIdsFromItem(item) {
-  if (!item.genre) return [];
-  return item.genre
-    .split(",")
-    .map((g) => g.trim())
-    .map((g) => GENRE_NAME_TO_ID[g])
-    .filter(Boolean);
-}
-
-function renderRecommendations() {
-  const section = document.getElementById("recommendations-section");
-  const track = document.getElementById("recommendations-track");
-  const typeEl = document.getElementById("recommendations-type");
-  const hintEl = document.getElementById("recommendations-hint");
-
-  if (recommendations.length === 0) {
-    section.style.display = "none";
-    return;
-  }
-
-  section.style.display = "block";
-
-  if (recommendationType === "personalized") {
-    const signalCount = buildRecommendationSignals().length;
-    typeEl.textContent = t("basedOnSignals", signalCount);
-    hintEl.style.display = "none";
-  } else {
-    typeEl.textContent = t("trendingThisWeek");
-    const signalCount = buildRecommendationSignals().length;
-    if (signalCount < 3) {
-      const remaining = 3 - signalCount;
-      hintEl.innerHTML = `${icon("info", 14)} ${t("addMoreMovies", remaining)}`;
-    } else {
-      hintEl.innerHTML = `${icon("sparkles", 14)} ${t("noStrongRecs")}`;
-    }
-    hintEl.style.display = "inline-flex";
-  }
-
-  track.innerHTML = recommendations
-    .map((item) => {
-      const posterHtml = item.poster
-        ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster><i data-lucide=\\'clapperboard\\'></i></div>';refreshIcons();">`
-        : `<div class="no-poster"><i data-lucide="clapperboard"></i></div>`;
-      const alreadyInList =
-        (item.tmdbId && movies.some((m) => m.tmdbId === item.tmdbId)) ||
-        (item.tmdbId && watchlist.some((w) => w.tmdbId === item.tmdbId));
-
-      return `
-      <div class="watchlist-card recommendation-card">
-        <button class="btn-info" onclick="event.stopPropagation(); openRecommendationDetail(${item.tmdbId})" title="${t("movieDetails")}">${icon("info", 16)}</button>
-        <div class="poster-container">${posterHtml}</div>
-        <div class="card-info">
-          <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
-          ${item.year ? `<div class="card-year">${item.year}</div>` : ""}
-          ${item.genre ? `<div class="card-genre">${escapeHtml(item.genre)}</div>` : ""}
-          ${item.voteAverage ? `<div class="card-tmdb-score">${icon("sparkles", 14)} TMDB ${item.voteAverage.toFixed(1)}</div>` : ""}
-          <div class="watchlist-actions rec-actions">
-            ${
-              alreadyInList
-                ? `<button class="btn-watched" disabled style="opacity:.55;">${t("alreadyAdded")}</button>`
-                : `<button class="btn-watched" onclick="addRecommendationToWatchlist(${item.tmdbId})" title="${t("addToMyListModal")}">${icon("plus", 14)} ${t("addToMyList")}</button>
-                   <button class="btn-watched btn-rec-watched" onclick="markRecommendationAsWatched(${item.tmdbId})" title="${t("markAsWatched")}">${icon("check", 14)} ${t("watched")}</button>
-                   <button class="btn-watched btn-rec-dismiss" onclick="dismissRecommendation(${item.tmdbId})" title="${t("dismissRecommendationTitle")}">${icon("x", 14)} ${t("notInterested")}</button>`
-            }
-          </div>
-        </div>
-      </div>`;
-    })
-    .join("");
-
-  setTimeout(() => updateSliderArrows("recommendations-track"), 100);
-  refreshIcons();
-}
-
-function openAddModal(target) {
-  addTarget = target || "movies";
-  selectedMovies = [];
-  searchResults = [];
-  document.getElementById("search-input").value = "";
-  document.getElementById("search-results").innerHTML = "";
-  renderSelectedMovies();
-
-  const modalTitle = document.querySelector("#modal-add .modal-header h2");
-  modalTitle.textContent =
-    addTarget === "watchlist" ? t("addToMyListModal") : t("addMovies");
-
-  trackEvent("add_modal_opened", {
-    target: addTarget,
-  });
-  document.getElementById("modal-add").style.display = "flex";
-}
-
-async function searchTMDB() {
-  const query = document.getElementById("search-input").value.trim();
-  if (!query) return;
-
-  const resultsDiv = document.getElementById("search-results");
-  resultsDiv.innerHTML = `<p class="inline-feedback">${t("searchingMovies")}</p>`;
-
+$("form-enter").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideLoginMessage();
+  const form = e.target;
+  setFormLoading(form, true, t("entering"));
   try {
-    const data = await api("search", { query });
-    searchResults = data.results || [];
-    trackEvent("movie_search", {
-      target: addTarget,
-      query_length: query.length,
-      results_count: searchResults.length,
-    });
-
-    if (searchResults.length === 0) {
-      resultsDiv.innerHTML =
-        `<p class="inline-feedback">${t("noResults")}</p>`;
-      return;
-    }
-
-    renderSearchResults();
+    await doEnter($("enter-code").value, $("enter-pass").value);
   } catch (err) {
-    resultsDiv.innerHTML = `<p class="inline-feedback error">Erro: ${escapeHtml(err.message)}</p>`;
+    showLoginMessage(err.message, "error");
+  } finally {
+    setFormLoading(form, false, t("btnEnter"));
   }
-}
+});
 
-function renderSearchResults() {
-  const resultsDiv = document.getElementById("search-results");
-  resultsDiv.innerHTML = searchResults
-    .map((m, i) => {
-      const alreadySelected = isAlreadySelected(m);
-      const posterHtml = m.posterThumb
-        ? `<img src="${escapeHtml(m.posterThumb)}" alt="">`
-        : `<div class="search-result-poster-fallback"><i data-lucide="clapperboard"></i></div>`;
-
-      return `
-      <div class="search-result-item ${alreadySelected ? "selected" : ""}">
-        ${posterHtml}
-        <div class="search-result-info">
-          <div class="title">${escapeHtml(m.title)}</div>
-          <div class="year">${m.year}${m.genre ? " &middot; " + escapeHtml(m.genre) : ""}</div>
-        </div>
-        <button class="btn-add-result ${alreadySelected ? "added" : ""}" onclick="addToSelected(${i})" ${alreadySelected ? "disabled" : ""}>
-          ${alreadySelected ? icon("check", 16) : icon("plus", 16)}
-        </button>
-      </div>`;
-    })
-    .join("");
-  refreshIcons();
-}
-
-function renderSelectedMovies() {
-  const section = document.getElementById("selected-section");
-  const list = document.getElementById("selected-list");
-  const count = document.getElementById("selected-count");
-  const btn = document.getElementById("btn-submit-selected");
-
-  if (selectedMovies.length === 0) {
-    section.style.display = "none";
-    return;
+$("form-create").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideLoginMessage();
+  const form = e.target;
+  const code = $("create-code").value;
+  const password = $("create-pass").value;
+  setFormLoading(form, true, t("creatingRoom"));
+  try {
+    await api("create", { code: cleanRoomCode(code), password });
+    showLoginMessage(t("roomCreated"), "success");
+    trackEvent("room_created");
+    await doEnter(code, password, true);
+  } catch (err) {
+    showLoginMessage(err.message, "error");
+  } finally {
+    setFormLoading(form, false, t("btnCreateRoom"));
   }
+});
 
-  section.style.display = "block";
-  count.textContent = selectedMovies.length;
-  btn.textContent =
-    addTarget === "watchlist"
-      ? t("addNToList", selectedMovies.length)
-      : t("addNMovies", selectedMovies.length);
+// ========== App shell events ==========
+document.querySelectorAll(".nav-item").forEach((btn) => {
+  btn.addEventListener("click", () => switchView(btn.dataset.view));
+});
 
-  list.innerHTML = selectedMovies
-    .map((m, i) => {
-      const thumb = m.posterThumb || m.poster;
-      return `
-      <div class="selected-item">
-        ${thumb ? `<img src="${escapeHtml(thumb)}" alt="">` : '<div class="selected-item-placeholder"><i data-lucide="clapperboard"></i></div>'}
-        <div class="selected-item-info">
-          <span class="title">${escapeHtml(m.title)}</span>
-          <span class="meta">${m.year || ""}${m.genre ? " &middot; " + escapeHtml(m.genre) : ""}</span>
-        </div>
-        <button class="btn-remove-selected" onclick="removeFromSelected(${i})" title="${t("remove")}">${icon("x", 14)}</button>
-      </div>`;
-    })
-    .join("");
-  refreshIcons();
+$("btn-add").addEventListener("click", openAddSheet);
+
+$("btn-settings").addEventListener("click", () => {
+  updateLangSeg();
+  openSheet("sheet-settings");
+});
+
+$("btn-logout").addEventListener("click", async () => {
+  const ok = await showConfirm(t("confirmLogout"));
+  if (ok) logout();
+});
+
+// Library toolbar
+document.querySelectorAll("#library-seg .seg").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    librarySeg = btn.dataset.seg;
+    document.querySelectorAll("#library-seg .seg").forEach((x) => {
+      x.classList.toggle("active", x === btn);
+    });
+    renderLibrary();
+  });
+});
+
+$("library-search").addEventListener("input", (e) => {
+  librarySearch = e.target.value;
+  renderLibrary();
+});
+
+// ========== Language ==========
+function updateLangSeg() {
+  document.querySelectorAll("#lang-seg .seg").forEach((b) => {
+    b.classList.toggle("active", b.dataset.lang === userLang);
+  });
 }
 
-function renderDetailActions(movie, opts) {
-  if (opts && opts.isRecommendation) {
-    return `
-      <div class="detail-actions">
-        <button class="btn-primary" onclick="closeModal('modal-detail'); addRecommendationToWatchlist(${opts.tmdbId})">${icon("plus", 14)} ${t("myListBtn")}</button>
-        <button class="btn-secondary" onclick="closeModal('modal-detail'); markRecommendationAsWatched(${opts.tmdbId})">${icon("check", 14)} ${t("watched")}</button>
-        <button class="btn-danger" onclick="closeModal('modal-detail'); dismissRecommendation(${opts.tmdbId})">${icon("x", 14)} ${t("notInterested")}</button>
-      </div>
-    `;
+document.querySelectorAll("#lang-seg .seg").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setLanguage(btn.dataset.lang);
+    updateLangSeg();
+  });
+});
+
+$("btn-lang-login").addEventListener("click", () => {
+  setLanguage(userLang === "pt-BR" ? "en" : "pt-BR");
+});
+
+function updateLoginLangButton() {
+  $("btn-lang-login").textContent = userLang === "pt-BR" ? "EN" : "PT";
+}
+
+window.onLanguageChange = () => {
+  updateLoginLangButton();
+  detailsCache.clear();
+  if (session) {
+    render();
+    // Recommendations come localized from TMDB — reload them in the new language.
+    loadRecommendations();
   }
-
-  if (opts && opts.isWatchlist) {
-    return `
-      <div class="detail-actions">
-        <button class="btn-primary" onclick="closeModal('modal-detail'); openMarkWatchedModal('${opts.watchlistId}')">${icon("check", 14)} ${t("watched")}</button>
-        <button class="btn-secondary" onclick="closeModal('modal-detail'); removeFromWatchlist('${opts.watchlistId}')">${icon("trash-2", 14)} ${t("removeBtn")}</button>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="detail-actions">
-      <button class="btn-primary" onclick="closeModal('modal-detail'); openEditModal('${movie.id}')">${icon("pencil", 14)} ${t("editNotes")}</button>
-    </div>
-  `;
-}
-
-function renderDetailFull(movie, details, opts) {
-  const castHtml = (details.cast || [])
-    .map(
-      (c) => `
-    <div class="detail-cast-item">
-      ${c.photo ? `<img src="${escapeHtml(c.photo)}" alt="${escapeHtml(c.name)}">` : '<div class="cast-no-photo"><i data-lucide="user"></i></div>'}
-      <div class="cast-text">
-        <span class="cast-name">${escapeHtml(c.name)}</span>
-        <span class="cast-character">${escapeHtml(c.character)}</span>
-      </div>
-    </div>`,
-    )
-    .join("");
-
-  const headerStyle = details.backdrop
-    ? `style="background-image: linear-gradient(to bottom, rgba(9,23,43,0.48), rgba(6,15,29,0.98)), url('${escapeHtml(details.backdrop)}'); background-size: cover; background-position: center top;"`
-    : "";
-
-  return `
-    <div class="detail-header" ${headerStyle}>
-      ${details.poster || movie.poster ? `<img class="detail-poster" src="${escapeHtml(details.poster || movie.poster)}" alt="${escapeHtml(movie.title)}">` : '<div class="detail-poster-empty"><i data-lucide="clapperboard"></i></div>'}
-      <div class="detail-info">
-        <h2>${escapeHtml(details.title || movie.title)}</h2>
-        ${details.originalTitle && details.originalTitle !== details.title ? `<div class="detail-original-title">${escapeHtml(details.originalTitle)}</div>` : ""}
-        <div class="detail-meta">
-          ${details.year ? `<span>${details.year}</span>` : ""}
-          ${details.runtime ? `<span>${details.runtime} min</span>` : ""}
-          ${details.director ? `<span>${t("direction")}: ${escapeHtml(details.director)}</span>` : ""}
-        </div>
-        ${details.genres ? `<div class="detail-genres">${escapeHtml(details.genres)}</div>` : ""}
-        ${details.voteAverage ? `<div class="detail-tmdb-score">TMDB: <strong>${details.voteAverage.toFixed(1)}</strong></div>` : ""}
-        ${buildRatingHtml(movie)}
-      </div>
-    </div>
-    ${details.overview ? `<div class="detail-section"><h3>${t("synopsis")}</h3><p>${escapeHtml(details.overview)}</p></div>` : ""}
-    ${castHtml ? `<div class="detail-section"><h3>${t("cast")}</h3><div class="detail-cast-grid">${castHtml}</div></div>` : ""}
-    ${renderDetailActions(movie, opts)}
-  `;
-}
+  trackEvent("language_changed", { new_language: userLang });
+};
 
 // ========== Init ==========
-applyI18n();
-refreshIcons();
-tryAutoLogin();
+async function init() {
+  applyTranslations();
+  updateLoginLangButton();
+
+  session = loadStoredSession();
+  if (session) {
+    try {
+      await doEnter(session.code, session.password, true);
+      return;
+    } catch (err) {
+      console.warn("Stored session invalid:", err.message);
+      session = null;
+      clearSession();
+    }
+  }
+  $("login-screen").style.display = "flex";
+}
+
+init();

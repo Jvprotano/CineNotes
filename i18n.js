@@ -1,552 +1,419 @@
 // ========== Internationalization ==========
+// Mechanism: t(key, ...args) + data-i18n attributes applied by applyTranslations().
+// userLang persists in localStorage and defaults to the device language.
+
 const translations = {
   "pt-BR": {
-    // Page & SEO
-    pageTitle: "CineNotes - Avaliem Filmes Juntos",
-    metaDescription:
-      "CineNotes: app para casais avaliarem filmes juntos, criarem uma watchlist privada e montarem um ranking com notas individuais ou conjuntas.",
-    metaKeywords:
-      "avaliacao de filmes em casal, ranking de filmes, watchlist de casal, avaliar filmes juntos, couple movie rating, movie ranking app, cinenotes",
-    ogTitle: "CineNotes - Avaliem Filmes Juntos",
-    ogDescription:
-      "Sala privada para casais avaliarem filmes, salvarem a watchlist e criarem um ranking compartilhado com visual premium.",
-    twitterDescription:
-      "O app para casais montarem uma watchlist, avaliarem filmes juntos e descobrirem recomendações melhores.",
-    ogImageAlt: "CineNotes - Avaliem filmes juntos como casal",
-    schemaDescription:
-      "Web app para casais avaliarem filmes juntos, manterem uma watchlist privada e criarem rankings compartilhados.",
+    // Meta
+    pageTitle: "CineNotes | Avaliem filmes juntos",
+
+    // Generic
+    cancel: "Cancelar",
+    save: "Salvar",
+    remove: "Remover",
+    close: "Fechar",
+    loading: "Carregando...",
+    seeAll: "Ver tudo",
+    movies_one: "filme",
+    movies_other: "filmes",
+    nMovies: (n) => `${n} ${n === 1 ? "filme" : "filmes"}`,
+
+    // Errors
+    errServer: "O servidor respondeu de um jeito inesperado. Tente de novo.",
+    errUnknown: "Algo deu errado. Tente novamente.",
+    errCodeLength: "O código precisa ter entre 3 e 30 caracteres (letras, números, - e _).",
+    errPasswordLength: "A senha precisa ter no mínimo 4 caracteres.",
+    errCodeTaken: "Este código já está em uso. Escolham outro.",
+    errRoomNotFound: "Sala não encontrada. Confira o código.",
+    errWrongPassword: "Senha incorreta.",
+    errOffline: "Sem conexão. As alterações serão salvas quando a internet voltar.",
+    errSaveFailed: "Não foi possível salvar. Verifique a conexão.",
 
     // Login
-    loginSubtitle:
-      "Um espaço privado para o casal guardar a watchlist, avaliar o que já viu e transformar cada sessão em um ranking bonito de acompanhar.",
+    loginTagline: "O diário de cinema de vocês dois",
+    loginSubtitle: "Watchlist compartilhada, notas a dois e um ranking que conta a história do casal.",
     tabEnter: "Entrar",
     tabCreate: "Criar sala",
     labelRoomCode: "Código da sala",
     labelPassword: "Senha",
-    labelChooseCode: "Escolha um código",
-    labelSetPassword: "Defina uma senha",
+    labelChooseCode: "Escolham um código",
+    labelSetPassword: "Definam uma senha",
     placeholderCode: "ex: joao-maria",
-    hintMinChars: "Mínimo de 3 caracteres, sem espaços",
-    hintMinPassword: "Mínimo de 4 caracteres",
+    hintCode: "3 a 30 caracteres, sem espaços",
+    hintPassword: "Mínimo de 4 caracteres",
     btnEnter: "Entrar",
     btnCreateRoom: "Criar sala",
-    highlightNoSignup: "Sem cadastro",
-    highlightWatchlist: "Watchlist",
-    highlightCoupleRanking: "Ranking do casal",
+    creatingRoom: "Criando sala...",
+    entering: "Entrando...",
+    roomCreated: "Sala criada! Entrando...",
+    loginChip1: "Sem cadastro",
+    loginChip2: "Notas a dois",
+    loginChip3: "Recomendações",
 
-    // Header
-    roomActive: "Sala ativa",
-    headerSubtitle:
-      "Organize a próxima sessão, descubra novos filmes e mantenha o ranking do casal em dia.",
-    btnAddMovie: "Adicionar filme",
-    btnLogoutTitle: "Sair da sala",
+    // Bottom nav
+    navHome: "Início",
+    navLibrary: "Filmes",
+    navWatchlist: "Lista",
+    navStats: "Resumo",
+    navAdd: "Adicionar",
 
-    // Tabs
-    tabHome: "Início",
-    tabRanking: "Ranking",
-    tabHis: "Dele",
-    tabHers: "Dela",
-    tabAll: "Todos",
+    // Home
+    greetingMorning: "Bom dia",
+    greetingAfternoon: "Boa tarde",
+    greetingEvening: "Boa noite",
+    homeSubtitle: "O que vamos assistir hoje?",
+    tonightTitle: "Sessão de hoje",
+    tonightKicker: "Sugestão da watchlist",
+    tonightShuffle: "Sortear outro",
+    tonightWatched: "Já vimos",
+    tonightEmptyTitle: "A watchlist está vazia",
+    tonightEmptyDesc: "Salvem filmes que querem ver juntos e o CineNotes sorteia a sessão de hoje.",
+    tonightEmptyAction: "Montar watchlist",
+    pendingTitle: (n) => (n === 1 ? "1 filme sem nota" : `${n} filmes sem nota`),
+    pendingDesc: "Deem a nota enquanto a lembrança está fresca.",
+    pendingRate: "Avaliar",
+    rowWatchlist: "Na fila de vocês",
+    rowTop: "Top do casal",
+    rowRecs: "Descobertas para vocês",
+    recsPersonalized: (n) => `Baseado em ${n} ${n === 1 ? "sinal" : "sinais"} do gosto de vocês`,
+    recsTrending: "Em alta esta semana",
+    recsHintAddMore: (n) => `Avaliem ou salvem mais ${n} ${n === 1 ? "filme" : "filmes"} para personalizar as sugestões.`,
+    recsRefresh: "Atualizar sugestões",
+    recsNotInterested: "Não me interessa",
+    recsBecause: (t) => `Porque curtiram “${t}”`,
+    emptyHomeTitle: "Bem-vindos ao CineNotes",
+    emptyHomeDesc: "Comecem adicionando um filme que assistiram juntos ou montando a watchlist da próxima sessão.",
+    emptyHomeAction: "Adicionar primeiro filme",
 
-    // Saving
-    savingChanges: "Salvando alterações...",
+    // Library
+    libraryTitle: "Filmes",
+    searchLibrary: "Buscar nos filmes de vocês...",
+    segCouple: "Casal",
+    segHis: "Dele",
+    segHers: "Dela",
+    segRecent: "Recentes",
+    unrated: "Sem nota",
+    emptyLibraryTitle: "Nenhum filme avaliado ainda",
+    emptyLibraryDesc: "Adicionem os filmes que já assistiram juntos para montar o ranking.",
+    emptyLibraryAction: "Adicionar filme",
+    emptySegTitle: "Nenhuma nota individual ainda",
+    emptySegDesc: "Usem notas individuais ao avaliar para montar este ranking.",
+    noSearchResults: (q) => `Nada encontrado para “${q}”.`,
 
-    // Watchlist section
-    myList: "Minha lista",
-    myListDesc:
-      "Filmes que ainda estão no radar antes de entrar no ranking.",
-    addToList: "Adicionar à lista",
-    emptyListTitle: "Nada salvo por aqui ainda",
-    emptyListDesc:
-      "Guardem os próximos filmes que querem ver juntos e montem a fila da próxima maratona.",
-
-    // Recommendations
-    discoveries: "Descobertas",
-    recommendations: "Recomendações",
-    recsDesc:
-      "Sugestões calibradas pelo histórico de vocês e pelo que está em alta agora.",
-    refreshRecsTitle: "Atualizar recomendações",
-    loadingRecs: "Carregando recomendações...",
-    basedOnSignals: (n) => `Baseado em ${n} sinais do perfil`,
-    trendingThisWeek: "Em alta esta semana",
-    addMoreMovies: (n) =>
-      `Adicionem mais <strong>${n}</strong> filme${n > 1 ? "s" : ""} avaliado${n > 1 ? "s" : ""} ou salvo na watchlist para personalizar melhor.`,
-    noStrongRecs:
-      "Não apareceu um conjunto forte de recomendações personalizadas com o histórico atual, então o app mostrou os destaques do momento.",
-    alreadyAdded: "Já adicionado",
-    addToMyList: "Lista",
-    watched: "Assistido",
-    notInterested: "N\u00e3o tenho interesse",
-    dismissRecommendationTitle: "Remover esta recomenda\u00e7\u00e3o",
-
-    // Add modal
-    catalog: "Catálogo",
-    addMovies: "Adicionar filmes",
-    addToMyListModal: "Adicionar à minha lista",
-    searchMovie: "Buscar filme",
-    searchPlaceholder: "Digite o nome do filme...",
-    btnSearch: "Buscar",
-    searchingMovies: "Buscando filmes...",
-    noResults: "Nenhum resultado encontrado.",
-    selectedMovies: "Filmes selecionados",
-    addNToList: (n) => `Adicionar ${n} à minha lista`,
-    addNMovies: (n) =>
-      `Adicionar ${n} filme${n > 1 ? "s" : ""}`,
-    remove: "Remover",
-
-    // Edit modal
-    quickEdit: "Ajuste rápido",
-    editMovie: "Editar filme",
-    labelTitle: "Título",
-    labelYear: "Ano",
-    labelPosterUrl: "URL do cartaz",
-    labelGenre: "Gênero",
-    ratingsTitle: "Notas de 0 a 10",
-    jointRating: "Nota conjunta",
-    individualRatings: "Notas individuais",
-    coupleRating: "Nota do casal",
-    hisRating: "Nota dele",
-    herRating: "Nota dela",
-    saveChanges: "Salvar alterações",
-    deleteBtn: "Excluir",
-
-    // Detail modal
-    movieSheet: "Ficha do filme",
-    details: "Detalhes",
-    synopsis: "Sinopse",
-    cast: "Elenco",
-    direction: "Direção",
-    loadingDetails: "Carregando detalhes...",
-    noRatingYet: "Sem nota ainda",
-    jointLabel: "Nota Conjunta",
-    hisLabel: "Dele",
-    herLabel: "Dela",
-    editNotes: "Editar notas",
-    myListBtn: "Minha lista",
-    removeBtn: "Remover",
-    movieDetails: "Detalhes do filme",
-
-    // Mark watched modal
-    markAsWatched: "Marcar como assistido",
-    saveAndMove: "Salvar e mover para o ranking",
-
-    // Ranking labels
-    rankingGeneral: "Ranking Geral",
-    rankingHis: "Ranking Dele",
-    rankingHers: "Ranking Dela",
-    allMovies: "Todos os Filmes",
-    ranking: "Ranking",
-
-    // Cards
-    noRating: "Sem nota",
-    joint: "Conjunta",
-    nMovies: (n) => `${n} filme${n !== 1 ? "s" : ""}`,
+    // Watchlist
+    watchlistTitle: "Watchlist",
+    watchlistSubtitle: "A fila de filmes para as próximas sessões.",
+    markWatched: "Já vimos",
+    emptyWatchlistTitle: "Nada na fila ainda",
+    emptyWatchlistDesc: "Salvem os filmes que querem ver juntos e nunca mais fiquem 40 minutos escolhendo.",
+    emptyWatchlistAction: "Adicionar à watchlist",
 
     // Stats
-    library: "Biblioteca",
-    moviesInRanking: (n) =>
-      `filme${n > 1 ? "s" : ""} já entrou${n > 1 ? "ram" : "u"} no ranking`,
-    average: "Média",
-    consolidatedAvg: "nota consolidada do histórico do casal",
-    watchlistLabel: "Watchlist",
-    awaitingSession: (n) =>
-      `filme${n === 1 ? "" : "s"} esperando a próxima sessão`,
-    currentTop: "Top atual",
-    addNotesToHighlight: "Adicionem notas para destacar um favorito",
+    statsTitle: "Resumo do casal",
+    statMovies: "Filmes vistos",
+    statAvg: "Nota média",
+    statThisYear: (y) => `Vistos em ${y}`,
+    statWatchlist: "Na watchlist",
+    hisVsHers: "Ele × Ela",
+    avgHis: "Média dele",
+    avgHers: "Média dela",
+    agreementTitle: "Sintonia do casal",
+    agreementDesc: (n) => `Baseado em ${n} ${n === 1 ? "filme com notas individuais" : "filmes com notas individuais"}`,
+    agreementNone: "Avaliem filmes com notas individuais para medir a sintonia.",
+    biggestFight: "Maior treta",
+    heGave: "ele deu",
+    sheGave: "ela deu",
+    topGenres: "Gêneros favoritos",
+    byDecade: "Por década",
+    bestMovie: "Melhor filme",
+    worstMovie: "Pior filme",
+    statsEmptyTitle: "Ainda sem dados",
+    statsEmptyDesc: "Avaliem alguns filmes e esta página vira o retrato cinéfilo do casal.",
 
-    // Pending banner
-    pendingBanner: (n, text) =>
-      `<strong>${n}</strong> filme${n > 1 ? "s" : ""} ainda precisa${n > 1 ? "m" : ""} de nota. Comecem por ${text}.`,
-    andMore: (n) => `e mais ${n}`,
-    rateNow: "Avaliar agora",
+    // Add sheet
+    addTitle: "Adicionar filme",
+    addSearchPlaceholder: "Busque pelo nome do filme...",
+    addSearchHint: "Digite pelo menos 2 letras para buscar no TMDB.",
+    addSearching: "Buscando...",
+    addNoResults: (q) => `Nenhum filme encontrado para “${q}”.`,
+    inLibrary: "No ranking",
+    inWatchlist: "Na lista",
+    actionToWatchlist: "Lista",
+    actionWatched: "Já vimos",
 
-    // Empty states
-    emptyRanking: {
-      kicker: "Ranking vazio",
-      title: "Ainda não existe ranking por aqui",
-      description:
-        "Adicionem os filmes que vocês já assistiram e preencham as notas para começar o ranking do casal.",
-      actionLabel: "Adicionar filmes assistidos",
-    },
-    emptyHisNoMovies: {
-      kicker: "Sem filmes",
-      title: "Ainda não há filmes para o ranking dele",
-      description:
-        "Adicionem os filmes que vocês já assistiram e depois registrem as notas dele para liberar esta visão.",
-      actionLabel: "Adicionar filmes assistidos",
-    },
-    emptyHisPending: {
-      kicker: "Notas pendentes",
-      title: "Ainda faltam as notas dele",
-      description:
-        "Editem os filmes já assistidos e preencham as notas dele para montar esse ranking.",
-      actionLabel: "Adicionar notas",
-    },
-    emptyHersNoMovies: {
-      kicker: "Sem filmes",
-      title: "Ainda não há filmes para o ranking dela",
-      description:
-        "Adicionem os filmes que vocês já assistiram e depois registrem as notas dela para liberar esta visão.",
-      actionLabel: "Adicionar filmes assistidos",
-    },
-    emptyHersPending: {
-      kicker: "Notas pendentes",
-      title: "Ainda faltam as notas dela",
-      description:
-        "Editem os filmes já assistidos e preencham as notas dela para montar esse ranking.",
-      actionLabel: "Adicionar notas",
-    },
-    emptyAll: {
-      kicker: "Biblioteca vazia",
-      title: "Nenhum filme assistido foi adicionado",
-      description:
-        "Adicionem os filmes que vocês já viram e aproveitem para registrar as notas de cada sessão.",
-      actionLabel: "Adicionar filmes assistidos",
-    },
-    emptyDefault: {
-      kicker: "Comecem por aqui",
-      title: "O ranking ainda está em branco",
-      description:
-        "Adicionem os filmes assistidos ou montem a watchlist para a experiência ficar completa.",
-      actionLabel: "Adicionar primeiro filme",
-    },
+    // Rate sheet
+    rateTitle: "Como foi?",
+    rateModeJoint: "Nota do casal",
+    rateModeIndividual: "Notas individuais",
+    coupleRating: "Nota conjunta",
+    hisRating: "Nota dele",
+    herRating: "Nota dela",
+    saveRating: "Salvar nota",
+    rateLater: "Avaliar depois",
 
-    // Errors
-    errCodeLength: "Código deve ter entre 3 e 30 caracteres",
-    errPasswordLength: "Senha deve ter no mínimo 4 caracteres",
-    errCodeTaken: "Este código já está em uso. Escolha outro.",
-    errRoomNotFound: "Sala não encontrada",
-    errWrongPassword: "Senha incorreta",
-    errServer:
-      "Erro no servidor. Verifique se o Blob Store está conectado ao projeto na Vercel.",
-    errUnknown: "Erro desconhecido",
-    errSave: (msg) => "Erro ao salvar: " + msg,
-    roomCreated: "Sala criada! Entrando...",
-    confirmRemoveFromList: "Remover este filme da sua lista?",
-    confirmDelete: "Tem certeza que deseja excluir este filme?",
+    // Detail sheet
+    directedBy: "Direção",
+    castTitle: "Elenco",
+    overviewTitle: "Sinopse",
+    ratingsTitle: "Notas",
+    jointLabel: "Casal",
+    hisLabel: "Ele",
+    herLabel: "Ela",
+    editRatings: "Editar notas",
+    rateMovie: "Dar nota",
+    deleteMovie: "Excluir filme",
+    confirmDelete: "Excluir este filme do ranking?",
+    confirmRemoveWatchlist: "Remover este filme da watchlist?",
+    addedOn: (d) => `Adicionado em ${d}`,
+    tmdbScore: "Nota TMDB",
+    runtimeMin: (m) => `${m} min`,
+    editDetails: "Editar detalhes",
+    labelTitle: "Título",
+    labelYear: "Ano",
+    labelGenre: "Gênero",
+    labelPoster: "URL do cartaz",
+
+    // Settings
+    settingsTitle: "Ajustes",
+    roomLabel: "Sala",
+    languageLabel: "Idioma",
+    logout: "Sair da sala",
+    confirmLogout: "Sair da sala neste aparelho?",
+    settingsAbout: "Feito para casais que amam cinema. Os dados ficam salvos na nuvem, na sala de vocês.",
+
+    // Toasts
+    toastSaved: "Alterações salvas",
+    toastAddedWatchlist: (t) => `“${t}” foi para a watchlist`,
+    toastAddedLibrary: (t) => `“${t}” adicionado aos filmes`,
+    toastRemoved: (t) => `“${t}” removido`,
+    toastDismissed: "Ok, não vamos mais sugerir esse.",
+    toastUndo: "Desfazer",
   },
 
   en: {
-    // Page & SEO
-    pageTitle: "CineNotes - Rate Movies Together",
-    metaDescription:
-      "CineNotes: the app for couples to rate movies together, build a private watchlist, and create a shared ranking with individual or joint ratings.",
-    metaKeywords:
-      "couple movie rating, movie ranking app, watchlist for couples, rate movies together, shared movie list, cinenotes, movie night tracker",
-    ogTitle: "CineNotes - Rate Movies Together",
-    ogDescription:
-      "A private room for couples to rate movies, save their watchlist, and build a shared ranking with a premium look.",
-    twitterDescription:
-      "The app for couples to build a watchlist, rate movies together, and get better recommendations.",
-    ogImageAlt: "CineNotes - Rate movies together as a couple",
-    schemaDescription:
-      "Web app for couples to rate movies together, maintain a private watchlist, and create shared rankings.",
+    // Meta
+    pageTitle: "CineNotes | Rate movies together",
+
+    // Generic
+    cancel: "Cancel",
+    save: "Save",
+    remove: "Remove",
+    close: "Close",
+    loading: "Loading...",
+    seeAll: "See all",
+    nMovies: (n) => `${n} ${n === 1 ? "movie" : "movies"}`,
+
+    // Errors
+    errServer: "The server answered in an unexpected way. Try again.",
+    errUnknown: "Something went wrong. Try again.",
+    errCodeLength: "The code must be 3-30 characters (letters, numbers, - and _).",
+    errPasswordLength: "The password must be at least 4 characters.",
+    errCodeTaken: "That code is taken. Pick another one.",
+    errRoomNotFound: "Room not found. Check the code.",
+    errWrongPassword: "Wrong password.",
+    errOffline: "You're offline. Changes will sync when you're back.",
+    errSaveFailed: "Couldn't save. Check your connection.",
 
     // Login
-    loginSubtitle:
-      "A private space for couples to save their watchlist, rate what they've watched, and build a beautiful ranking together.",
-    tabEnter: "Enter",
+    loginTagline: "The movie diary for the two of you",
+    loginSubtitle: "A shared watchlist, ratings for two and a ranking that tells your story as a couple.",
+    tabEnter: "Sign in",
     tabCreate: "Create room",
     labelRoomCode: "Room code",
     labelPassword: "Password",
-    labelChooseCode: "Choose a code",
+    labelChooseCode: "Pick a code",
     labelSetPassword: "Set a password",
     placeholderCode: "e.g. john-jane",
-    hintMinChars: "At least 3 characters, no spaces",
-    hintMinPassword: "At least 4 characters",
+    hintCode: "3-30 characters, no spaces",
+    hintPassword: "At least 4 characters",
     btnEnter: "Enter",
     btnCreateRoom: "Create room",
-    highlightNoSignup: "No signup",
-    highlightWatchlist: "Watchlist",
-    highlightCoupleRanking: "Couple ranking",
+    creatingRoom: "Creating room...",
+    entering: "Entering...",
+    roomCreated: "Room created! Entering...",
+    loginChip1: "No sign-up",
+    loginChip2: "Ratings for two",
+    loginChip3: "Recommendations",
 
-    // Header
-    roomActive: "Active room",
-    headerSubtitle:
-      "Plan the next session, discover new movies, and keep your couple ranking up to date.",
-    btnAddMovie: "Add movie",
-    btnLogoutTitle: "Leave room",
+    // Bottom nav
+    navHome: "Home",
+    navLibrary: "Movies",
+    navWatchlist: "Queue",
+    navStats: "Stats",
+    navAdd: "Add",
 
-    // Tabs
-    tabHome: "Home",
-    tabRanking: "Ranking",
-    tabHis: "His",
-    tabHers: "Hers",
-    tabAll: "All",
+    // Home
+    greetingMorning: "Good morning",
+    greetingAfternoon: "Good afternoon",
+    greetingEvening: "Good evening",
+    homeSubtitle: "What are we watching today?",
+    tonightTitle: "Tonight's pick",
+    tonightKicker: "From your watchlist",
+    tonightShuffle: "Shuffle",
+    tonightWatched: "Watched it",
+    tonightEmptyTitle: "Your watchlist is empty",
+    tonightEmptyDesc: "Save movies you want to watch together and CineNotes will pick tonight's session.",
+    tonightEmptyAction: "Build the watchlist",
+    pendingTitle: (n) => (n === 1 ? "1 movie awaiting a rating" : `${n} movies awaiting ratings`),
+    pendingDesc: "Rate them while the memory is fresh.",
+    pendingRate: "Rate",
+    rowWatchlist: "Up next",
+    rowTop: "Your top picks",
+    rowRecs: "Discoveries for you two",
+    recsPersonalized: (n) => `Based on ${n} taste ${n === 1 ? "signal" : "signals"}`,
+    recsTrending: "Trending this week",
+    recsHintAddMore: (n) => `Rate or save ${n} more ${n === 1 ? "movie" : "movies"} to personalize suggestions.`,
+    recsRefresh: "Refresh suggestions",
+    recsNotInterested: "Not interested",
+    recsBecause: (t) => `Because you liked “${t}”`,
+    emptyHomeTitle: "Welcome to CineNotes",
+    emptyHomeDesc: "Start by adding a movie you watched together, or build the watchlist for your next session.",
+    emptyHomeAction: "Add your first movie",
 
-    // Saving
-    savingChanges: "Saving changes...",
+    // Library
+    libraryTitle: "Movies",
+    searchLibrary: "Search your movies...",
+    segCouple: "Couple",
+    segHis: "His",
+    segHers: "Hers",
+    segRecent: "Recent",
+    unrated: "Unrated",
+    emptyLibraryTitle: "No rated movies yet",
+    emptyLibraryDesc: "Add the movies you've watched together to build your ranking.",
+    emptyLibraryAction: "Add a movie",
+    emptySegTitle: "No individual ratings yet",
+    emptySegDesc: "Use individual ratings when rating to build this ranking.",
+    noSearchResults: (q) => `Nothing found for “${q}”.`,
 
-    // Watchlist section
-    myList: "My list",
-    myListDesc: "Movies still on the radar before making it to the ranking.",
-    addToList: "Add to list",
-    emptyListTitle: "Nothing saved here yet",
-    emptyListDesc:
-      "Save the movies you want to watch together and build the queue for your next marathon.",
-
-    // Recommendations
-    discoveries: "Discoveries",
-    recommendations: "Recommendations",
-    recsDesc:
-      "Suggestions based on your history and what's trending right now.",
-    refreshRecsTitle: "Refresh recommendations",
-    loadingRecs: "Loading recommendations...",
-    basedOnSignals: (n) => `Based on ${n} profile signals`,
-    trendingThisWeek: "Trending this week",
-    addMoreMovies: (n) =>
-      `Add <strong>${n}</strong> more rated or watchlisted movie${n > 1 ? "s" : ""} to improve recommendations.`,
-    noStrongRecs:
-      "No strong personalized recommendations were found for your current profile, so here are this week's highlights.",
-    alreadyAdded: "Already added",
-    addToMyList: "List",
-    watched: "Watched",
-    notInterested: "Not interested",
-    dismissRecommendationTitle: "Remove this recommendation",
-
-    // Add modal
-    catalog: "Catalog",
-    addMovies: "Add movies",
-    addToMyListModal: "Add to my list",
-    searchMovie: "Search movie",
-    searchPlaceholder: "Type the movie name...",
-    btnSearch: "Search",
-    searchingMovies: "Searching movies...",
-    noResults: "No results found.",
-    selectedMovies: "Selected movies",
-    addNToList: (n) => `Add ${n} to my list`,
-    addNMovies: (n) => `Add ${n} movie${n > 1 ? "s" : ""}`,
-    remove: "Remove",
-
-    // Edit modal
-    quickEdit: "Quick edit",
-    editMovie: "Edit movie",
-    labelTitle: "Title",
-    labelYear: "Year",
-    labelPosterUrl: "Poster URL",
-    labelGenre: "Genre",
-    ratingsTitle: "Ratings from 0 to 10",
-    jointRating: "Joint rating",
-    individualRatings: "Individual ratings",
-    coupleRating: "Couple rating",
-    hisRating: "His rating",
-    herRating: "Her rating",
-    saveChanges: "Save changes",
-    deleteBtn: "Delete",
-
-    // Detail modal
-    movieSheet: "Movie details",
-    details: "Details",
-    synopsis: "Synopsis",
-    cast: "Cast",
-    direction: "Director",
-    loadingDetails: "Loading details...",
-    noRatingYet: "No rating yet",
-    jointLabel: "Joint Rating",
-    hisLabel: "His",
-    herLabel: "Hers",
-    editNotes: "Edit ratings",
-    myListBtn: "My list",
-    removeBtn: "Remove",
-    movieDetails: "Movie details",
-
-    // Mark watched modal
-    markAsWatched: "Mark as watched",
-    saveAndMove: "Save and move to ranking",
-
-    // Ranking labels
-    rankingGeneral: "Overall Ranking",
-    rankingHis: "His Ranking",
-    rankingHers: "Her Ranking",
-    allMovies: "All Movies",
-    ranking: "Ranking",
-
-    // Cards
-    noRating: "No rating",
-    joint: "Joint",
-    nMovies: (n) => `${n} movie${n !== 1 ? "s" : ""}`,
+    // Watchlist
+    watchlistTitle: "Watchlist",
+    watchlistSubtitle: "Your queue for the next movie nights.",
+    markWatched: "Watched it",
+    emptyWatchlistTitle: "Nothing queued yet",
+    emptyWatchlistDesc: "Save the movies you want to watch together and never spend 40 minutes choosing again.",
+    emptyWatchlistAction: "Add to watchlist",
 
     // Stats
-    library: "Library",
-    moviesInRanking: (n) =>
-      `movie${n > 1 ? "s" : ""} in the ranking`,
-    average: "Average",
-    consolidatedAvg: "consolidated rating from the couple's history",
-    watchlistLabel: "Watchlist",
-    awaitingSession: (n) =>
-      `movie${n === 1 ? "" : "s"} awaiting the next session`,
-    currentTop: "Current top",
-    addNotesToHighlight: "Add ratings to highlight a favorite",
+    statsTitle: "Couple recap",
+    statMovies: "Movies watched",
+    statAvg: "Average rating",
+    statThisYear: (y) => `Watched in ${y}`,
+    statWatchlist: "In the watchlist",
+    hisVsHers: "Him × Her",
+    avgHis: "His average",
+    avgHers: "Her average",
+    agreementTitle: "Couple sync",
+    agreementDesc: (n) => `Based on ${n} ${n === 1 ? "movie with individual ratings" : "movies with individual ratings"}`,
+    agreementNone: "Rate movies with individual scores to measure your sync.",
+    biggestFight: "Biggest disagreement",
+    heGave: "he gave",
+    sheGave: "she gave",
+    topGenres: "Favorite genres",
+    byDecade: "By decade",
+    bestMovie: "Best movie",
+    worstMovie: "Worst movie",
+    statsEmptyTitle: "No data yet",
+    statsEmptyDesc: "Rate a few movies and this page becomes your couple's film portrait.",
 
-    // Pending banner
-    pendingBanner: (n, text) =>
-      `<strong>${n}</strong> movie${n > 1 ? "s" : ""} still need${n > 1 ? "" : "s"} a rating. Start with ${text}.`,
-    andMore: (n) => `and ${n} more`,
-    rateNow: "Rate now",
+    // Add sheet
+    addTitle: "Add a movie",
+    addSearchPlaceholder: "Search by movie title...",
+    addSearchHint: "Type at least 2 letters to search TMDB.",
+    addSearching: "Searching...",
+    addNoResults: (q) => `No movies found for “${q}”.`,
+    inLibrary: "In ranking",
+    inWatchlist: "Queued",
+    actionToWatchlist: "Queue",
+    actionWatched: "Watched",
 
-    // Empty states
-    emptyRanking: {
-      kicker: "Empty ranking",
-      title: "No ranking here yet",
-      description:
-        "Add the movies you've watched and fill in the ratings to start your couple ranking.",
-      actionLabel: "Add watched movies",
-    },
-    emptyHisNoMovies: {
-      kicker: "No movies",
-      title: "No movies for his ranking yet",
-      description:
-        "Add the movies you've watched and then fill in his ratings to unlock this view.",
-      actionLabel: "Add watched movies",
-    },
-    emptyHisPending: {
-      kicker: "Pending ratings",
-      title: "His ratings are still missing",
-      description:
-        "Edit the watched movies and fill in his ratings to build this ranking.",
-      actionLabel: "Add ratings",
-    },
-    emptyHersNoMovies: {
-      kicker: "No movies",
-      title: "No movies for her ranking yet",
-      description:
-        "Add the movies you've watched and then fill in her ratings to unlock this view.",
-      actionLabel: "Add watched movies",
-    },
-    emptyHersPending: {
-      kicker: "Pending ratings",
-      title: "Her ratings are still missing",
-      description:
-        "Edit the watched movies and fill in her ratings to build this ranking.",
-      actionLabel: "Add ratings",
-    },
-    emptyAll: {
-      kicker: "Empty library",
-      title: "No watched movies added",
-      description:
-        "Add the movies you've watched and take the chance to rate each session.",
-      actionLabel: "Add watched movies",
-    },
-    emptyDefault: {
-      kicker: "Start here",
-      title: "The ranking is still blank",
-      description:
-        "Add watched movies or build your watchlist to get the full experience.",
-      actionLabel: "Add first movie",
-    },
+    // Rate sheet
+    rateTitle: "How was it?",
+    rateModeJoint: "Couple rating",
+    rateModeIndividual: "Individual ratings",
+    coupleRating: "Joint rating",
+    hisRating: "His rating",
+    herRating: "Her rating",
+    saveRating: "Save rating",
+    rateLater: "Rate later",
 
-    // Errors
-    errCodeLength: "Code must be between 3 and 30 characters",
-    errPasswordLength: "Password must be at least 4 characters",
-    errCodeTaken: "This code is already in use. Choose another.",
-    errRoomNotFound: "Room not found",
-    errWrongPassword: "Wrong password",
-    errServer:
-      "Server error. Check if the Blob Store is connected to the project on Vercel.",
-    errUnknown: "Unknown error",
-    errSave: (msg) => "Error saving: " + msg,
-    roomCreated: "Room created! Entering...",
-    confirmRemoveFromList: "Remove this movie from your list?",
-    confirmDelete: "Are you sure you want to delete this movie?",
+    // Detail sheet
+    directedBy: "Directed by",
+    castTitle: "Cast",
+    overviewTitle: "Overview",
+    ratingsTitle: "Ratings",
+    jointLabel: "Couple",
+    hisLabel: "Him",
+    herLabel: "Her",
+    editRatings: "Edit ratings",
+    rateMovie: "Rate it",
+    deleteMovie: "Delete movie",
+    confirmDelete: "Delete this movie from the ranking?",
+    confirmRemoveWatchlist: "Remove this movie from the watchlist?",
+    addedOn: (d) => `Added on ${d}`,
+    tmdbScore: "TMDB score",
+    runtimeMin: (m) => `${m} min`,
+    editDetails: "Edit details",
+    labelTitle: "Title",
+    labelYear: "Year",
+    labelGenre: "Genre",
+    labelPoster: "Poster URL",
+
+    // Settings
+    settingsTitle: "Settings",
+    roomLabel: "Room",
+    languageLabel: "Language",
+    logout: "Leave room",
+    confirmLogout: "Leave the room on this device?",
+    settingsAbout: "Made for couples who love movies. Your data lives in the cloud, inside your room.",
+
+    // Toasts
+    toastSaved: "Changes saved",
+    toastAddedWatchlist: (t) => `“${t}” added to the watchlist`,
+    toastAddedLibrary: (t) => `“${t}” added to your movies`,
+    toastRemoved: (t) => `“${t}” removed`,
+    toastDismissed: "Got it — we won't suggest that one again.",
+    toastUndo: "Undo",
   },
 };
 
-// Detect language: Portuguese for pt-*, English for everything else
+// ---- Language state ----
 let userLang = (() => {
-  const saved = localStorage.getItem("cinenotes_lang");
-  if (saved === "pt-BR" || saved === "en") return saved;
-  const nav = navigator.language || navigator.userLanguage || "en";
+  const stored = localStorage.getItem("cinenotes_lang");
+  if (stored && translations[stored]) return stored;
+  const nav = (navigator.language || "pt-BR").toLowerCase();
   return nav.startsWith("pt") ? "pt-BR" : "en";
 })();
 
-function setLanguage(lang) {
-  if (lang !== "pt-BR" && lang !== "en") return;
-  userLang = lang;
-  localStorage.setItem("cinenotes_lang", lang);
-  applyI18n();
-  const label = lang === "pt-BR" ? "EN" : "PT";
-  const title = lang === "pt-BR" ? "Switch to English" : "Mudar para Portugu\u00eas";
-  document.querySelectorAll("#btn-lang-toggle, #btn-lang-login").forEach(btn => {
-    btn.textContent = label;
-    btn.title = title;
-  });
-  // Re-render app content if logged in
-  if (typeof render === "function") {
-    try {
-      render();
-      if (typeof loadRecommendations === "function") loadRecommendations();
-    } catch (_) {}
-  }
-}
-
 function t(key, ...args) {
-  // Support dot notation for nested keys (e.g. "emptyDefault.title")
-  let val;
-  if (key.includes(".")) {
-    const [first, second] = key.split(".");
-    val = (translations[userLang][first] ?? translations["pt-BR"][first] ?? {})[second] ?? key;
-  } else {
-    val = translations[userLang][key] ?? translations["pt-BR"][key] ?? key;
-  }
-  if (typeof val === "function") return val(...args);
-  return val;
+  const dict = translations[userLang] || translations["pt-BR"];
+  let value = dict[key];
+  if (value === undefined) value = translations["pt-BR"][key];
+  if (value === undefined) return key;
+  return typeof value === "function" ? value(...args) : value;
 }
 
-// Apply translations to HTML elements with data-i18n attributes
-function applyI18n() {
-  document.querySelectorAll("[data-i18n]").forEach((el) => {
+function applyTranslations(root = document) {
+  root.querySelectorAll("[data-i18n]").forEach((el) => {
     el.textContent = t(el.dataset.i18n);
   });
-  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+  root.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
     el.placeholder = t(el.dataset.i18nPlaceholder);
   });
-  document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+  root.querySelectorAll("[data-i18n-title]").forEach((el) => {
     el.title = t(el.dataset.i18nTitle);
   });
-  document.querySelectorAll("[data-i18n-html]").forEach((el) => {
-    el.innerHTML = t(el.dataset.i18nHtml);
+  root.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+    el.setAttribute("aria-label", t(el.dataset.i18nAria));
   });
-  // Update page title & html lang
+  document.documentElement.lang = userLang;
   document.title = t("pageTitle");
-  document.documentElement.lang = userLang === "pt-BR" ? "pt-BR" : "en";
+}
 
-  // Sync language toggle buttons
-  const label = userLang === "pt-BR" ? "EN" : "PT";
-  const title = userLang === "pt-BR" ? "Switch to English" : "Mudar para Portugu\u00eas";
-  document.querySelectorAll("#btn-lang-toggle, #btn-lang-login").forEach(btn => {
-    btn.textContent = label;
-    btn.title = title;
-  });
-
-  // SEO meta tags
-  const metaMap = {
-    'meta[name="description"]': t("metaDescription"),
-    'meta[name="title"]': t("ogTitle"),
-    'meta[name="keywords"]': t("metaKeywords"),
-    'meta[name="language"]': userLang === "pt-BR" ? "pt-BR" : "en",
-    'meta[property="og:title"]': t("ogTitle"),
-    'meta[property="og:description"]': t("ogDescription"),
-    'meta[property="og:image:alt"]': t("ogImageAlt"),
-    'meta[property="og:locale"]': userLang === "pt-BR" ? "pt_BR" : "en_US",
-    'meta[property="og:locale:alternate"]': userLang === "pt-BR" ? "en_US" : "pt_BR",
-    'meta[name="twitter:title"]': t("ogTitle"),
-    'meta[name="twitter:description"]': t("twitterDescription"),
-    'meta[name="twitter:image:alt"]': t("ogImageAlt"),
-  };
-  for (const [selector, value] of Object.entries(metaMap)) {
-    const el = document.querySelector(selector);
-    if (el) el.setAttribute("content", value);
-  }
-
-  // Update JSON-LD structured data
-  const ldScript = document.querySelector('script[type="application/ld+json"]');
-  if (ldScript) {
-    try {
-      const ld = JSON.parse(ldScript.textContent);
-      ld.description = t("schemaDescription");
-      ld.name = "CineNotes";
-      if (ld.offers) ld.offers.priceCurrency = userLang === "pt-BR" ? "BRL" : "USD";
-      ldScript.textContent = JSON.stringify(ld);
-    } catch (_) {}
-  }
+function setLanguage(lang) {
+  if (!translations[lang]) return;
+  userLang = lang;
+  localStorage.setItem("cinenotes_lang", lang);
+  applyTranslations();
+  // Let the app re-render dynamic content in the new language.
+  if (typeof window.onLanguageChange === "function") window.onLanguageChange();
 }

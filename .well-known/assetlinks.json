@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.vercel.cinenotes",
+      "sha256_cert_fingerprints": [
+        "D2:FC:4C:3B:72:AC:CB:FF:5D:B9:F5:81:B7:CC:13:83:93:D4:2E:F4:6C:7D:46:6E:E9:C1:E8:AC:61:12:D0:68"
+      ]
+    }
+  }
+]

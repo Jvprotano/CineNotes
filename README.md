@@ -91,17 +91,28 @@ Voce pode dar uma **nota conjunta** ou **notas individuais** (dele e dela), e o 
    - **All Movies** -- Chronological list of all entries
 5. **Edit & Manage** -- Click any movie card to edit ratings, details, or delete the entry.
 
-### Architecture
+### Architecture (v2 — mobile-first rebuild)
+
+The frontend was rebuilt from scratch as a mobile-first, app-like experience: bottom tab
+navigation (Home / Movies / Watchlist / Stats + a center Add button), bottom sheets instead
+of desktop modals, a "Tonight's pick" watchlist shuffler, live TMDB search-as-you-type,
+a couple stats screen (his × her averages, couple sync, genres, decades), persistent login,
+and inline SVG icons (no icon CDN). The backend API and the stored data format are unchanged
+and fully compatible with rooms created by v1.
 
 ```
 CineNotes/
-├── index.html          # Single-page application (frontend)
-├── style.css           # Dark-themed responsive styles
-├── app.js              # Client-side application logic
+├── index.html          # App shell: login, views, bottom nav, sheets, SVG icon sprite
+├── style.css           # Design system (dark, mobile-first, safe-area aware)
+├── app.js              # Client logic: state, views, sheets, sync, recommendations signals
+├── i18n.js             # PT-BR / EN dictionaries + translation engine
 ├── api/
-│   ├── create.js       # Serverless function: create a new room
-│   ├── load.js         # Serverless function: authenticate & load room data
-│   └── save.js         # Serverless function: authenticate & save room data
+│   ├── create.js       # Serverless: create a new room
+│   ├── load.js         # Serverless: authenticate & load room data
+│   ├── save.js         # Serverless: authenticate & save room data
+│   ├── search.js       # Serverless: TMDB movie search
+│   ├── details.js      # Serverless: TMDB movie details + credits
+│   └── recommendations.js  # Serverless: personalized recommendation pipeline
 ├── vercel.json         # Vercel routing configuration
 └── package.json        # Dependencies (@vercel/blob)
 ```
@@ -110,139 +121,65 @@ Data is stored per-room as JSON files in **Vercel Blob Storage** (`salas/<room-c
 
 ---
 
-## Recommendation Engine
+## Recommendation Engine (v2 — "taste-first")
 
-The recommendation system now uses a multi-stage ranking pipeline instead of relying only on TMDB's `/recommendations` endpoint.
+The engine was redesigned around one principle: **a movie is recommended because it
+matches the couple's taste, never because it is new or currently hyped.** Trending
+sources, recency boosts, and raw-popularity boosts were removed entirely.
 
-### Strategy Overview
+### Signals
 
-1. **Collect user signals**  
-   The existing `seeds` request field now carries all rated movies plus watchlist items. Rated movies keep their real score. Watchlist items are treated as a strong positive intent signal with a synthetic rating of `7.5`.
+- **Ratings** are z-score normalized against the couple's own rating scale
+  (`z = (rating − mean) / std`), so a 8.0 from a strict rater counts as much as a 9.5
+  from a generous one. A mild time decay (half-life ≈ 2 years) keeps taste current.
+- **Watchlist** items are a positive intent signal (fixed weight `+0.6`) and also
+  generate candidates.
+- **Low ratings** produce negative weights that flow into the content profile.
+- **Dismissed recommendations** ("not interested") build per-genre fatigue penalties.
 
-2. **Build a user profile**  
-   Every rating is normalized with:
+### Candidate generation (no trending)
 
-   ```text
-   weight = rating - user_mean_rating
-   ```
+- `/movie/{id}/recommendations` + `/similar` for the top 8 loved seeds
+- `/movie/{id}/recommendations` for the 3 most recent watchlist items
+- `/discover` by top genre (and top genre *pair*), favorite directors (`with_crew`)
+  and favorite keywords (`with_keywords`) — always sorted by `vote_average.desc`
+  with vote-count floors, never by popularity
+- Candidates with fewer than 50 votes are dropped (kills barely-voted hype releases)
 
-   Positive weights represent preference. Negative weights represent avoidance. Watchlist items receive an additional positive boost so they influence both genre preference and candidate generation.
-
-3. **Fetch candidates from multiple TMDB sources**  
-   For the strongest positive seeds, the backend fetches:
-
-   - `/movie/{id}/recommendations`
-   - `/movie/{id}/similar`
-
-   It also fetches:
-
-   - `/discover/movie` using the user's strongest genres
-   - `/trending/movie/week` for exploration
-
-   Calls are executed in parallel and intentionally capped to one page per endpoint to keep latency under control.
-
-4. **Merge, score, explore, and rerank**  
-   Results are deduplicated by TMDB ID, scored with user-profile similarity plus TMDB metadata, then reranked to reserve exploration slots and avoid repetitive genre streaks.
-
-### Scoring Formula
-
-Each candidate receives a final ranking score based on:
+### Scoring
 
 ```text
-score =
-  w1 * weighted_similarity +
-  w2 * frequency +
-  w3 * tmdb_vote_average +
-  w4 * popularity +
-  w5 * recency
+score = 0.40 * seed_affinity      # log-dampened sum of contributions from loved seeds
+      + 0.25 * content_similarity # weighted genres/keywords/directors/cast vs profile
+      + 0.25 * quality            # Bayesian TMDB rating: WR = v/(v+m)·R + m/(v+m)·C
+      + 0.10 * era_fit            # matches the DECADES the couple actually watches
+
+penalties (multiplicative):
+      0.7^n  per disliked genre   (and hard-dropped unless within 75% of top score)
+      0.75   if similar to explicitly disliked content
+      0.9    per genre dismissed 3+ times
 ```
 
-Where:
+The **Bayesian quality prior** (`m = 300`, `C = 6.6`) shrinks scores of low-vote
+movies toward the global mean, so an acclaimed classic with 15k votes beats a
+week-old release with 8.9 from 40 votes. **Era fit** replaces the old recency boost:
+if the couple mostly watches 90s–2010s films, a 2026 release gets no advantage for
+being new.
 
-- `weighted_similarity` comes from genre overlap with weighted user signals
-- `frequency` counts how often a movie appears across recommendation sources
-- `tmdb_vote_average` is normalized to 0-1
-- `popularity` is log-normalized to reduce blockbuster dominance
-- `recency` gives a modest boost to newer releases
+### Selection
 
-Genre similarity is computed with the Jaccard index:
+- **MMR diversity re-ranking** (`λ = 0.22`) prevents genre streaks without burying
+  strong matches.
+- **2 "hidden gem" slots**: the highest-quality candidates *outside* the couple's
+  dominant genres — quality-driven exploration instead of trending noise.
+- Every result carries `basedOn` — the loved movie that generated it — shown in the
+  UI as *"Because you liked X"*.
 
-```text
-genre_similarity = intersection(genres) / union(genres)
-```
+### Testing
 
-Disliked genres keep the existing multiplicative penalty:
-
-```text
-score *= 0.7 ^ disliked_genre_matches
-```
-
-### Data Flow
-
-```text
-movies + watchlist
-        |
-        v
-buildRecommendationSignals() on the client
-        |
-        v
-/api/recommendations
-        |
-        v
-getUserData()
-        |
-        v
-buildUserProfile()
-        |
-        v
-fetchCandidates()
-        |
-        v
-mergeAndDeduplicate()
-        |
-        v
-computeScores()
-        |
-        v
-applyExploration()
-        |
-        v
-rerankWithDiversity()
-        |
-        v
-returnTopResults()
-```
-
-### Trade-offs vs Previous Approach
-
-Previous approach:
-
-- Used only highly rated seed movies
-- Relied almost entirely on TMDB `/recommendations`
-- Ranked by seed-rating sum plus raw frequency
-- Ignored watchlist intent
-
-Current approach:
-
-- Uses all ratings, not only favorites
-- Uses watchlist as a first-class signal
-- Combines recommendations, similar titles, discover, and trending
-- Penalizes negative taste signals instead of only boosting favorites
-- Explicitly balances personalization, diversity, and exploration
-
-Trade-offs:
-
-- The backend logic is more complex than the previous rule-based ranker
-- It makes more TMDB calls, but calls are bounded and parallelized
-- Genre-based similarity is still heuristic and less expressive than embeddings
-
-### Future Improvements
-
-- Synopsis or multimodal embeddings for richer similarity
-- Vector search over a local movie index instead of TMDB-only retrieval
-- Online learning from clicks, skips, and watchlist additions
-- Separate pair-level and individual taste models
-- Caching TMDB metadata to reduce repeated network calls
+`npm test` runs `tests/recommendations.test.js`, a mocked-TMDB harness that asserts:
+personalized results, exclusion of watched movies, low-vote hype filtered out,
+disliked genres dropped, recent releases a minority, and reasons present.
 
 ---
 
@@ -253,9 +190,9 @@ Trade-offs:
 | Frontend   | Vanilla HTML, CSS, JavaScript       |
 | Backend    | Vercel Serverless Functions (Node.js) |
 | Storage    | Vercel Blob                         |
-| Movie Data | TMDB API (optional)                 |
+| Movie Data | TMDB API (server-side key)          |
 | Hosting    | Vercel                              |
-| Font       | Inter (Google Fonts)                |
+| Font       | Outfit (Google Fonts)               |
 
 ---
 
